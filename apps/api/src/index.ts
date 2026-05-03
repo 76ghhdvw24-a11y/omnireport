@@ -10,6 +10,10 @@ import { createAuthMiddleware } from './middleware/auth.middleware';
 import { createHealthRoutes } from './routes/health.routes';
 import { createReportsRoutes } from './routes/reports.routes';
 import { createAuthRoutes } from './routes/auth.routes';
+import { createOrganizationRoutes } from './routes/organization.routes';
+import { createClientsRoutes } from './routes/clients.routes';
+import { createTemplatesRoutes } from './routes/templates.routes';
+import { createChatRoutes } from './routes/chat.routes';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,7 +29,7 @@ app.use(express.json());
 const prisma = new PrismaClient();
 
 const s3Service = new S3Service({
-  region: process.env.AWS_REGION || 'us-east-1',
+  region: process.env.AWS_REGION || 'us-east-2',
   bucket: process.env.AWS_S3_BUCKET || '',
   accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
   secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
@@ -55,6 +59,11 @@ app.use('/api/v1/auth', createAuthRoutes(prisma, passwordService, jwtService));
 
 const reportsRouter = createReportsRoutes(prisma, processMediaUseCase, queueService, s3Service, pdfService);
 app.use('/api/v1/reports', authMiddleware, reportsRouter);
+
+app.use('/api/v1/organization', authMiddleware, createOrganizationRoutes(prisma, s3Service));
+app.use('/api/v1/clients', authMiddleware, createClientsRoutes(prisma));
+app.use('/api/v1/templates', authMiddleware, createTemplatesRoutes(prisma));
+app.use('/api/v1/reports', authMiddleware, createChatRoutes(prisma));
 
 app.get('/', (req, res) => {
   res.json({

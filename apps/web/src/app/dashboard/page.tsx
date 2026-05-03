@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
-import { FileText, Plus, LogOut, Loader2 } from 'lucide-react';
+import { FileText, Plus, Loader2 } from 'lucide-react';
+import { NavBar } from '@/components/navbar';
 
 interface Report {
   id: string;
@@ -14,37 +15,36 @@ interface Report {
   severity: string | null;
   createdAt: string;
   updatedAt: string;
+  clientId?: string | null;
+  total?: number | null;
+  currency?: string | null;
 }
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, logout, isLoading: authLoading } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const [reports, setReports] = useState<Report[]>([]);
   const [isLoadingReports, setIsLoadingReports] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('');
 
   useEffect(() => {
     if (authLoading) return;
-    if (!user) {
-      router.push('/login');
-      return;
-    }
+    if (!user) { router.push('/login'); return; }
     fetchReports();
-  }, [user, authLoading, router]);
+  }, [user, authLoading, router, statusFilter]);
 
   const fetchReports = async () => {
     try {
-      const res = await api.get('/api/v1/reports?take=50');
+      const params = new URLSearchParams();
+      params.set('take', '50');
+      if (statusFilter) params.set('status', statusFilter);
+      const res = await api.get(`/api/v1/reports?${params.toString()}`);
       setReports(res.data.items);
     } catch (err) {
-      console.error('Failed to fetch reports', err);
+      console.error('Error al cargar presupuestos', err);
     } finally {
       setIsLoadingReports(false);
     }
-  };
-
-  const handleLogout = () => {
-    logout();
-    router.push('/login');
   };
 
   const getStatusColor = (status: string) => {
@@ -54,102 +54,77 @@ export default function DashboardPage() {
       TRANSCRIBING: 'bg-blue-100 text-blue-800',
       ANALYZING: 'bg-purple-100 text-purple-800',
       COMPLETED: 'bg-green-100 text-green-800',
+      DRAFT: 'bg-amber-100 text-amber-800',
+      APPROVED: 'bg-emerald-100 text-emerald-800',
       FAILED: 'bg-red-100 text-red-800',
     };
     return colors[status] || 'bg-gray-200 text-gray-800';
   };
 
+  const getStatusLabel = (status: string) => {
+    const labels: Record<string, string> = {
+      PENDING: 'Pendiente', PROCESSING: 'Procesando', TRANSCRIBING: 'Transcribiendo',
+      ANALYZING: 'Analizando', COMPLETED: 'Completado', DRAFT: 'Borrador',
+      APPROVED: 'Aprobado', FAILED: 'Fallido',
+    };
+    return labels[status] || status;
+  };
+
   const getSeverityColor = (severity: string | null) => {
     const colors: Record<string, string> = {
-      CRITICAL: 'text-red-600 font-bold',
-      HIGH: 'text-orange-600 font-semibold',
-      MEDIUM: 'text-yellow-600',
-      LOW: 'text-blue-600',
-      INFO: 'text-gray-500',
+      CRITICAL: 'text-red-600 font-bold', HIGH: 'text-orange-600 font-semibold',
+      MEDIUM: 'text-yellow-600', LOW: 'text-blue-600', INFO: 'text-gray-500',
     };
     return colors[severity || ''] || 'text-gray-400';
   };
 
-  if (authLoading) {
-    return (
-      <main className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#f9fafb' }}>
-        <Loader2 className="w-8 h-8 animate-spin" style={{ color: '#2563eb' }} />
-      </main>
-    );
-  }
+  const cs = (c: string | null | undefined) => (c === 'USD' || !c) ? '$' : ({ USD: '$', EUR: '\u20ac', GBP: '\u00a3', MXN: 'MX$', COP: 'COP$', ARS: 'AR$', BRL: 'R$', PEN: 'S/', CLP: 'CLP$' }[c || 'USD'] || (c || 'USD') + ' ');
 
+  if (authLoading) {
+    return (<main className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></main>);
+  }
   if (!user) return null;
 
   return (
-    <main className="min-h-screen" style={{ backgroundColor: '#f9fafb' }}>
-      <header style={{ backgroundColor: '#ffffff', borderBottom: '1px solid #e5e7eb' }}>
-        <div className="max-w-5xl mx-auto px-4 py-4 flex items-center justify-between">
-          <div>
-            <h1 className="text-xl font-bold" style={{ color: '#111827' }}>OmniReport AI</h1>
-            <p className="text-sm" style={{ color: '#6b7280' }}>{user.email}</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Link
-              href="/reports/new"
-              className="flex items-center gap-2 px-4 py-2 rounded-md font-medium"
-              style={{ backgroundColor: '#2563eb', color: '#ffffff' }}
-            >
-              <Plus className="w-4 h-4" />
-              New Report
-            </Link>
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-2 px-3 py-2"
-              style={{ color: '#6b7280' }}
-            >
-              <LogOut className="w-4 h-4" />
-            </button>
-          </div>
+    <main className="min-h-screen bg-gray-50">
+      <NavBar />
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-gray-900">Mis Presupuestos</h2>
+          <select value={statusFilter} onChange={(e) => { setStatusFilter(e.target.value); setIsLoadingReports(true); }} className="text-sm border border-gray-300 rounded-md px-3 py-1.5">
+            <option value="">Todos los estados</option>
+            <option value="PENDING">Pendiente</option>
+            <option value="PROCESSING">Procesando</option>
+            <option value="COMPLETED">Completado</option>
+            <option value="DRAFT">Borrador</option>
+            <option value="APPROVED">Aprobado</option>
+            <option value="FAILED">Fallido</option>
+          </select>
         </div>
-      </header>
-
-      <div className="max-w-5xl mx-auto px-4 py-8">
-        <h2 className="text-lg font-semibold mb-4" style={{ color: '#111827' }}>Your Reports</h2>
-
         {isLoadingReports ? (
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="w-6 h-6 animate-spin" style={{ color: '#2563eb' }} />
-          </div>
+          <div className="flex items-center justify-center py-12"><Loader2 className="w-6 h-6 animate-spin text-blue-600" /></div>
         ) : reports.length === 0 ? (
-          <div className="rounded-lg shadow p-12 text-center" style={{ backgroundColor: '#ffffff' }}>
-            <FileText className="w-12 h-12 mx-auto mb-4" style={{ color: '#d1d5db' }} />
-            <p style={{ color: '#6b7280' }}>No reports yet</p>
-            <Link href="/reports/new" className="text-sm mt-2 inline-block" style={{ color: '#2563eb' }}>
-              Create your first report
-            </Link>
+          <div className="bg-white rounded-lg shadow p-12 text-center">
+            <FileText className="w-12 h-12 mx-auto mb-4 text-gray-300" />
+            <p className="text-gray-500">Aún no hay presupuestos</p>
+            <Link href="/reports/new" className="text-sm mt-2 inline-block text-blue-600 hover:underline">Crear primer presupuesto</Link>
           </div>
         ) : (
-          <div className="rounded-lg shadow overflow-hidden" style={{ backgroundColor: '#ffffff' }}>
-            <div className="divide-y" style={{ borderColor: '#f3f4f6' }}>
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="divide-y divide-gray-100">
               {reports.map((report) => (
-                <Link
-                  key={report.id}
-                  href={`/reports/${report.id}`}
-                  className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors"
-                >
+                <Link key={report.id} href={`/reports/${report.id}`} className="flex items-center justify-between p-4 hover:bg-gray-50 transition-colors">
                   <div className="flex items-center gap-3">
-                    <FileText className="w-5 h-5" style={{ color: '#9ca3af' }} />
+                    <FileText className="w-5 h-5 text-gray-400" />
                     <div>
-                      <p className="font-medium" style={{ color: '#111827' }}>{report.title}</p>
-                      <p className="text-xs" style={{ color: '#6b7280' }}>
-                        {new Date(report.createdAt).toLocaleDateString()}
-                      </p>
+                      <p className="font-medium text-gray-900">{report.title}</p>
+                      <p className="text-xs text-gray-500">{new Date(report.createdAt).toLocaleDateString('es-ES')}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    {report.severity && (
-                      <span className={`text-xs ${getSeverityColor(report.severity)}`}>
-                        {report.severity}
-                      </span>
-                    )}
-                    <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(report.status)}`}>
-                      {report.status}
-                    </span>
+                    {report.severity && <span className={`text-xs ${getSeverityColor(report.severity)}`}>{report.severity}</span>}
+                    {report.total != null && <span className="text-xs text-gray-500">{cs(report.currency)}{Number(report.total).toFixed(2)}</span>}
+                    <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(report.status)}`}>{getStatusLabel(report.status)}</span>
                   </div>
                 </Link>
               ))}

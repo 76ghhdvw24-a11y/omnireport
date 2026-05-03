@@ -46,6 +46,7 @@ export class PrismaReportRepository implements ReportRepository {
         organizationId: data.organizationId,
         userId: data.userId,
         templateId: data.templateId,
+        clientId: data.clientId,
         audioUrl: data.audioUrl,
         audioTranscript: data.audioTranscript,
         imageUrls: data.imageUrls,
@@ -54,6 +55,11 @@ export class PrismaReportRepository implements ReportRepository {
         recommendedAction: data.recommendedAction,
         aiModel: data.aiModel,
         aiResponseTime: data.aiResponseTime,
+        subtotal: (data as any).subtotal,
+        tax: (data as any).tax,
+        total: (data as any).total,
+        currency: (data as any).currency,
+        language: (data as any).language,
         metadata: data.metadata as any,
         tags: data.tags,
       },
@@ -78,6 +84,12 @@ export class PrismaReportRepository implements ReportRepository {
     if (data.metadata !== undefined) updateData.metadata = data.metadata as any;
     if (data.tags !== undefined) updateData.tags = data.tags;
     if (data.completedAt !== undefined) updateData.completedAt = data.completedAt;
+    if ((data as any).clientId !== undefined) updateData.client = { connect: { id: (data as any).clientId } };
+    if ((data as any).subtotal !== undefined) updateData.subtotal = (data as any).subtotal;
+    if ((data as any).tax !== undefined) updateData.tax = (data as any).tax;
+    if ((data as any).total !== undefined) updateData.total = (data as any).total;
+    if ((data as any).currency !== undefined) updateData.currency = (data as any).currency;
+    if ((data as any).language !== undefined) updateData.language = (data as any).language;
 
     await this.prisma.report.update({
       where: { id },
@@ -110,6 +122,7 @@ export class PrismaReportRepository implements ReportRepository {
       organizationId: prismaReport.organizationId,
       userId: prismaReport.userId,
       templateId: prismaReport.templateId,
+      clientId: prismaReport.clientId,
       audioUrl: prismaReport.audioUrl,
       audioTranscript: prismaReport.audioTranscript,
       imageUrls: prismaReport.imageUrls || [],
@@ -118,6 +131,11 @@ export class PrismaReportRepository implements ReportRepository {
       recommendedAction: prismaReport.recommendedAction,
       aiModel: prismaReport.aiModel,
       aiResponseTime: prismaReport.aiResponseTime,
+      subtotal: prismaReport.subtotal,
+      tax: prismaReport.tax,
+      total: prismaReport.total,
+      currency: prismaReport.currency,
+      language: prismaReport.language,
       metadata: prismaReport.metadata as any,
       tags: prismaReport.tags || [],
       createdAt: prismaReport.createdAt,

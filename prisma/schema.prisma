@@ -12,6 +12,12 @@ model Organization {
   name        String
   slug        String   @unique
   logoUrl     String?
+  address     String?
+  phone       String?
+  taxId       String?
+  country     String?
+  currency    String   @default("USD")
+  language    String   @default("es")
   plan        Plan     @default(FREE)
   maxReports  Int      @default(10)
   maxStorage  BigInt   @default(1073741824)
@@ -22,6 +28,7 @@ model Organization {
   users       User[]
   reports     Report[]
   templates   Template[]
+  clients    Client[]
 
   @@index([slug])
 }
@@ -57,6 +64,8 @@ model Report {
   user              User          @relation(fields: [userId], references: [id])
   templateId        String?
   template          Template?     @relation(fields: [templateId], references: [id])
+  clientId          String?
+  client            Client?       @relation(fields: [clientId], references: [id])
 
   audioUrl          String?
   audioTranscript   String?
@@ -68,6 +77,12 @@ model Report {
   aiModel           String?
   aiResponseTime    Int?
 
+  subtotal          Float?
+  tax               Float?
+  total             Float?
+  currency          String?
+  language          String?
+
   metadata          Json?
   tags              String[]
 
@@ -75,10 +90,13 @@ model Report {
   updatedAt         DateTime      @updatedAt
   completedAt       DateTime?
 
+  chatMessages      ChatMessage[]
+
   @@index([organizationId])
   @@index([userId])
   @@index([status])
   @@index([createdAt])
+  @@index([clientId])
 }
 
 model Template {
@@ -100,6 +118,34 @@ model Template {
   @@index([industry])
 }
 
+model Client {
+  id             String   @id @default(uuid())
+  name           String
+  email          String?
+  phone          String?
+  address        String?
+  taxId          String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  reports        Report[]
+
+  @@index([organizationId])
+}
+
+model ChatMessage {
+  id         String   @id @default(uuid())
+  reportId   String
+  role       String
+  content    String
+  createdAt  DateTime @default(now())
+  report     Report   @relation(fields: [reportId], references: [id])
+
+  @@index([reportId])
+}
+
 enum Plan {
   FREE
   PRO
@@ -117,6 +163,8 @@ enum ReportStatus {
   TRANSCRIBING
   ANALYZING
   COMPLETED
+  DRAFT
+  APPROVED
   FAILED
 }
 

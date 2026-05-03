@@ -9,13 +9,15 @@ async function callNvidiaAI(request: {
   images: Array<{ url: string; mimeType: string }>;
   systemPrompt: string;
   outputFormat: Record<string, unknown>;
+  language: string;
 }): Promise<AIAnalysisResult> {
   const apiKey = process.env.NVIDIA_API_KEY || '';
   const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
 
   const hasTranscript = request.transcript.trim().length > 0;
   const transcriptSection = hasTranscript ? `TRANSCRIPT:\n${request.transcript}\n\n` : '';
-  const prompt = `ANALYZE THE FOLLOWING:\n\n${transcriptSection}${request.images.length > 0 ? `${request.images.length} image(s) provided` : 'No images provided'}\n\nProvide a structured analysis following this format:\n${JSON.stringify(request.outputFormat, null, 2)}\n\nEnsure the response is valid JSON with all required fields.`;
+  const languageInstruction = request.language ? `IMPORTANT: Respond entirely in ${request.language}. All findings, summaries, and recommendations must be written in ${request.language}.\n\n` : '';
+  const prompt = `${languageInstruction}ANALYZE THE FOLLOWING:\n\n${transcriptSection}${request.images.length > 0 ? `${request.images.length} image(s) provided` : 'No images provided'}\n\nProvide a structured analysis following this format:\n${JSON.stringify(request.outputFormat, null, 2)}\n\nEnsure the response is valid JSON with all required fields. Include estimated costs for each finding when applicable.`;
 
   content.push({ type: 'text', text: prompt });
 
@@ -64,9 +66,11 @@ async function callNvidiaAI(request: {
       confidence: Number(f.confidence || 0),
       component: f.component ? String(f.component) : undefined,
       condition: f.condition ? String(f.condition) : undefined,
+      estimatedCost: f.estimatedCost !== undefined && f.estimatedCost !== null ? Number(f.estimatedCost) : undefined,
     })),
     executiveSummary: String(parsed.executiveSummary || ''),
     recommendedAction: String(parsed.recommendedAction || ''),
+    estimatedTotalCost: parsed.estimatedTotalCost !== undefined && parsed.estimatedTotalCost !== null ? Number(parsed.estimatedTotalCost) : undefined,
   };
 }
 
@@ -79,7 +83,7 @@ class WorkerReportRepository {
     return this.mapToReport(report);
   }
 
-  async update(id: string, data: Partial<Report>): Promise<void> {
+  async update(id: string, data: Partial<Report> & Record<string, unknown>): Promise<void> {
     const updateData: Record<string, unknown> = {};
     if (data.status !== undefined) updateData.status = data.status;
     if (data.audioTranscript !== undefined) updateData.audioTranscript = data.audioTranscript;
@@ -90,6 +94,10 @@ class WorkerReportRepository {
     if (data.aiResponseTime !== undefined) updateData.aiResponseTime = data.aiResponseTime;
     if (data.severity !== undefined) updateData.severity = data.severity;
     if (data.completedAt !== undefined) updateData.completedAt = data.completedAt;
+    if (data.subtotal !== undefined) updateData.subtotal = data.subtotal;
+    if (data.tax !== undefined) updateData.tax = data.tax;
+    if (data.total !== undefined) updateData.total = data.total;
+    if (data.currency !== undefined) updateData.currency = data.currency;
     updateData.updatedAt = new Date();
 
     await this.prisma.report.update({ where: { id }, data: updateData });
@@ -116,6 +124,7 @@ class WorkerReportRepository {
       organizationId: prismaReport.organizationId,
       userId: prismaReport.userId,
       templateId: prismaReport.templateId,
+      clientId: prismaReport.clientId,
       audioUrl: prismaReport.audioUrl,
       audioTranscript: prismaReport.audioTranscript,
       imageUrls: prismaReport.imageUrls || [],
@@ -124,6 +133,11 @@ class WorkerReportRepository {
       recommendedAction: prismaReport.recommendedAction,
       aiModel: prismaReport.aiModel,
       aiResponseTime: prismaReport.aiResponseTime,
+      subtotal: prismaReport.subtotal,
+      tax: prismaReport.tax,
+      total: prismaReport.total,
+      currency: prismaReport.currency,
+      language: prismaReport.language,
       metadata: prismaReport.metadata as any,
       tags: prismaReport.tags || [],
       createdAt: prismaReport.createdAt,
@@ -142,11 +156,9 @@ async function main() {
   const redisConnectionOptions = {
     host: redisUrl.includes('//') ? new URL(redisUrl).hostname : 'localhost',
     port: redisUrl.includes('//') ? parseInt(new URL(redisUrl).port) || 6379 : 6379,
-    maxRetriesPerRequest: null,
+    maxRetriesPerRequest: null as null,
     enableReadyCheck: false,
   };
-
-  console.log('[Worker] Redis connection options:', JSON.stringify(redisConnectionOptions, null, 2));
 
   const queue = new Queue('reports', { connection: redisConnectionOptions });
 
@@ -157,7 +169,7 @@ async function main() {
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
   });
 
-const whisperService = new WhisperService({
+  const whisperService = new WhisperService({
     apiKey: process.env.OPENAI_API_KEY || '',
     model: 'whisper-1',
   });
@@ -183,7 +195,7 @@ const whisperService = new WhisperService({
           const report = await reportRepo.findById(reportId);
           if (!report) throw new Error('Report not found');
 
-          const extractS3Key = (url: string): string => decodeURIComponent(url.replace(/^https:\/\/[^/]+\//, ''));
+          const language = report.language || 'es';
 
           console.log(`[Worker] Generating presigned URLs for ${report.imageUrls.length} images`);
           const presignedImageUrls = await Promise.all(
@@ -194,41 +206,98 @@ const whisperService = new WhisperService({
             presignedAudioUrl = await s3Service.generatePresignedDownloadUrl(extractS3Key(report.audioUrl));
           }
 
-          console.log(`[Worker] First presigned URL: ${presignedImageUrls[0]?.substring(0, 80)}...`);
-
           let transcript = '';
           if (presignedAudioUrl) {
             await reportRepo.update(reportId, { status: 'TRANSCRIBING' });
-            const transcription = await whisperService.transcribe({ audioUrl: presignedAudioUrl, language: 'en' });
+            const whisperLanguage = language === 'en' ? 'en' : language === 'pt' ? 'pt' : 'es';
+            const transcription = await whisperService.transcribe({
+              audioUrl: presignedAudioUrl,
+              language: whisperLanguage,
+            });
             transcript = transcription.text;
             await reportRepo.update(reportId, { audioTranscript: transcript });
           }
 
           await reportRepo.update(reportId, { status: 'ANALYZING' });
 
+          const languagePrompts: Record<string, string> = {
+            es: `Eres un analista técnico experto en generación de presupuestos e inspecciones. Tu objetivo es producir un PRESUPUESTO profesional que pueda ser entregado a un cliente.
+
+IMPORTANTE:
+- Responde SIEMPRE en español.
+- Para cada hallazgo, incluye un costo estimado de reparación cuando sea posible.
+- El resumen ejecutivo debe ser claro y orientado al cliente final.
+- La acción recomendada debe ser específica y con prioridades claras.
+- Estima el costo total del presupuesto (sumando hallazgos o dando un estimado global).
+
+Analiza las imágenes y/o transcripción proporcionadas para producir un presupuesto técnico completo. Identifica problemas, evalúa severidad, y proporciona estimaciones de costo realistas.`,
+            en: `You are an expert technical analyst specializing in inspection quotes and estimates. Your goal is to produce a professional QUOTE that can be delivered to a client.
+
+IMPORTANT:
+- Always respond in English.
+- For each finding, include an estimated repair cost when possible.
+- The executive summary should be clear and client-oriented.
+- Recommended actions should be specific with clear priorities.
+- Estimate the total cost of the quote (summing findings or providing a global estimate).
+
+Analyze the provided images and/or transcript to produce a complete technical quote. Identify issues, assess severity, and provide realistic cost estimates.`,
+            pt: `Você é um analista técnico especialista em orçamentos e inspeções. Seu objetivo é produzir um ORÇAMENTO profissional que possa ser entregue a um cliente.
+
+IMPORTANTE:
+- Responda SEMPRE em português.
+- Para cada constatação, inclua um custo estimado de reparo quando possível.
+- O resumo executivo deve ser claro e orientado ao cliente final.
+- A ação recomendada deve ser específica com prioridades claras.
+- Estime o custo total do orçamento (somando constatações ou dando uma estimativa global).
+
+Analise as imagens e/ou transcrição fornecidas para produzir um orçamento técnico completo. Identifique problemas, avalie a severidade e forneça estimativas de custo realistas.`,
+          };
+
+          let systemPrompt = languagePrompts[language] || languagePrompts['es'];
+
+          let outputFormat: Record<string, unknown> = {
+            findings: [{ description: 'string', severity: 'CRITICAL | HIGH | MEDIUM | LOW | INFO', confidence: 0.0, component: 'string', estimatedCost: 0.0 }],
+            executiveSummary: 'string',
+            recommendedAction: 'string',
+            estimatedTotalCost: 0.0,
+          };
+
+          if (report.templateId) {
+            const template = await reportRepo.getTemplate(report.templateId);
+            if (template) {
+              systemPrompt = template.systemPrompt;
+              outputFormat = template.outputFormat;
+            }
+          }
+
           const startTime = Date.now();
           const analysis = await callNvidiaAI({
             transcript,
             images: presignedImageUrls.map(url => ({ url, mimeType: 'image/jpeg' })),
-            systemPrompt: 'You are an expert technical analyst specializing in inspection reports. Analyze the provided images and transcript to produce a comprehensive technical report. Focus on identifying issues and their severity, understanding the context and components involved, providing actionable recommendations, and estimating impact and urgency. Be precise and technical in your analysis. If information is insufficient, acknowledge limitations rather than making assumptions.',
-            outputFormat: {
-              findings: [{ description: 'string', severity: 'CRITICAL | HIGH | MEDIUM | LOW | INFO', confidence: 0.0 }],
-              executiveSummary: 'string',
-              recommendedAction: 'string',
-            },
+            systemPrompt,
+            outputFormat,
+            language,
           });
 
           const responseTime = Date.now() - startTime;
 
+          let subtotal: number | undefined;
+          if (analysis.findings) {
+            subtotal = analysis.findings.reduce((sum: number, f: Finding) => sum + (f.estimatedCost || 0), 0);
+          }
+          const total = analysis.estimatedTotalCost || subtotal;
+
           await reportRepo.update(reportId, {
             status: 'COMPLETED',
-            findings: analysis.findings,
+            findings: analysis.findings as any,
             executiveSummary: analysis.executiveSummary,
             recommendedAction: analysis.recommendedAction,
             aiModel: 'google/gemma-4-31b-it',
             aiResponseTime: responseTime,
+            subtotal: subtotal,
+            total: total,
             completedAt: new Date(),
-          });
+          } as any);
 
           console.log(`Finished report: ${reportId}`);
         } catch (error: any) {
@@ -268,5 +337,4 @@ const whisperService = new WhisperService({
 main().catch((error) => {
   console.error('Worker crashed:', error);
   process.exit(1);
-}
-);
+});

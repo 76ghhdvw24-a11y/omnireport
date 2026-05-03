@@ -1,4 +1,4 @@
-export type ReportStatus = 'PENDING' | 'PROCESSING' | 'TRANSCRIBING' | 'ANALYZING' | 'COMPLETED' | 'FAILED';
+export type ReportStatus = 'PENDING' | 'PROCESSING' | 'TRANSCRIBING' | 'ANALYZING' | 'COMPLETED' | 'DRAFT' | 'APPROVED' | 'FAILED';
 export type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO';
 export type Industry = 'AUTOMOTIVE' | 'CONSTRUCTION' | 'MANUFACTURING' | 'INSURANCE' | 'REAL_ESTATE' | 'GENERAL';
 
@@ -35,6 +35,7 @@ export interface Report {
   organizationId: string;
   userId: string;
   templateId: string | null;
+  clientId: string | null;
   audioUrl: string | null;
   audioTranscript: string | null;
   imageUrls: string[];
@@ -43,9 +44,22 @@ export interface Report {
   recommendedAction: string | null;
   aiModel: string | null;
   aiResponseTime: number | null;
+  subtotal: number | null;
+  tax: number | null;
+  total: number | null;
+  currency: string | null;
+  language: string | null;
   metadata: Record<string, unknown> | null;
   tags: string[];
   createdAt: Date;
   updatedAt: Date;
   completedAt: Date | null;
+}
+
+export interface ChatMessage {
+  id: string;
+  reportId: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  createdAt: Date;
 }

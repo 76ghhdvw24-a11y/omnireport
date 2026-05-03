@@ -162,5 +162,45 @@ export function createAuthRoutes(
     }
   });
 
+  router.post('/refresh', async (req, res) => {
+    try {
+      const { refreshToken } = req.body;
+      if (!refreshToken) {
+        return res.status(400).json({ error: 'Refresh token is required' });
+      }
+
+      const decoded = jwtService.verifyRefreshToken(refreshToken);
+      if (decoded.type !== 'refresh') {
+        return res.status(401).json({ error: 'Invalid refresh token' });
+      }
+
+      const user = await prisma.user.findUnique({ where: { id: decoded.sub } });
+      if (!user || !user.isActive) {
+        return res.status(401).json({ error: 'User not found or inactive' });
+      }
+
+      const tokens = jwtService.generateTokenPair({
+        sub: user.id,
+        email: user.email,
+        orgId: user.organizationId,
+        role: user.role,
+      });
+
+      res.json({
+        tokens,
+        user: {
+          id: user.id,
+          email: user.email,
+          firstName: user.firstName,
+          lastName: user.lastName,
+          role: user.role,
+          organizationId: user.organizationId,
+        },
+      });
+    } catch (error) {
+      res.status(401).json({ error: 'Invalid or expired refresh token' });
+    }
+  });
+
   return router;
 }
