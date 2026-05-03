@@ -1,0 +1,23 @@
+{
+  "name": "@omnireport/worker",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc --build",
+    "start": "node dist/index.js"
+  },
+  "dependencies": {
+    "@omnireport/domain": "file:../../packages/domain",
+    "@omnireport/infrastructure": "file:../../packages/infrastructure",
+    "@omnireport/shared": "file:../../packages/shared",
+    "@omnireport/use-cases": "file:../../packages/use-cases",
+    "@prisma/client": "^6.0.1",
+    "dotenv": "^16.4.7"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.5",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  }
+}

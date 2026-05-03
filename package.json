@@ -1,0 +1,40 @@
+{
+  "name": "omnireport",
+  "version": "1.0.0",
+  "description": "OmniReport AI - Multi-tenant SaaS for automated technical report generation",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently \"npm run dev:api\" \"npm run dev:web\"",
+    "dev:api": "npm run dev --workspace=apps/api",
+    "dev:web": "npm run dev --workspace=apps/web",
+    "dev:worker": "npm run dev --workspace=apps/worker",
+    "build": "tsc --build tsconfig.build.json && npm run build --workspace=apps/web",
+    "build:api": "tsc --build apps/api/tsconfig.json",
+    "build:worker": "tsc --build apps/worker/tsconfig.json",
+    "build:web": "npm run build --workspace=apps/web",
+    "clean": "rm -rf node_modules apps/*/node_modules packages/*/node_modules apps/*/dist packages/*/dist",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "db:seed": "tsx scripts/seed.ts",
+    "prisma:generate": "prisma generate",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:coverage": "jest --coverage"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "concurrently": "^9.1.0",
+    "jest": "^30.3.0",
+    "prisma": "^6.0.1",
+    "ts-jest": "^29.4.9",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": ["ES2022"],
+    "moduleResolution": "node",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "declaration": true,
+    "declarationMap": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@omnireport/domain": ["./packages/domain/src"],
+      "@omnireport/use-cases": ["./packages/use-cases/src"],
+      "@omnireport/infrastructure": ["./packages/infrastructure/src"],
+      "@omnireport/shared": ["./packages/shared/src"]
+    }
+  },
+  "exclude": ["node_modules", "dist", "**/*.test.ts"]
+}

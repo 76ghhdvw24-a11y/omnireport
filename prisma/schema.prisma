@@ -1,0 +1,138 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Organization {
+  id          String   @id @default(uuid())
+  name        String
+  slug        String   @unique
+  logoUrl     String?
+  plan        Plan     @default(FREE)
+  maxReports  Int      @default(10)
+  maxStorage  BigInt   @default(1073741824)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  users       User[]
+  reports     Report[]
+  templates   Template[]
+
+  @@index([slug])
+}
+
+model User {
+  id             String       @id @default(uuid())
+  email          String       @unique
+  passwordHash   String
+  firstName      String
+  lastName       String
+  role           UserRole     @default(MEMBER)
+  isActive       Boolean      @default(true)
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  reports        Report[]
+
+  @@index([email])
+  @@index([organizationId])
+}
+
+model Report {
+  id                String        @id @default(uuid())
+  title             String
+  description       String?
+  status            ReportStatus  @default(PENDING)
+  severity          Severity?
+  organizationId    String
+  organization      Organization  @relation(fields: [organizationId], references: [id])
+  userId            String
+  user              User          @relation(fields: [userId], references: [id])
+  templateId        String?
+  template          Template?     @relation(fields: [templateId], references: [id])
+
+  audioUrl          String?
+  audioTranscript   String?
+  imageUrls         String[]
+
+  findings          Json?
+  executiveSummary  String?
+  recommendedAction String?
+  aiModel           String?
+  aiResponseTime    Int?
+
+  metadata          Json?
+  tags              String[]
+
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+  completedAt       DateTime?
+
+  @@index([organizationId])
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Template {
+  id              String       @id @default(uuid())
+  name            String
+  description     String?
+  industry        Industry     @default(GENERAL)
+  systemPrompt    String
+  outputFormat    Json
+  isActive        Boolean      @default(true)
+  organizationId  String?
+  organization    Organization? @relation(fields: [organizationId], references: [id])
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  reports         Report[]
+
+  @@index([organizationId])
+  @@index([industry])
+}
+
+enum Plan {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum UserRole {
+  ADMIN
+  MEMBER
+}
+
+enum ReportStatus {
+  PENDING
+  PROCESSING
+  TRANSCRIBING
+  ANALYZING
+  COMPLETED
+  FAILED
+}
+
+enum Severity {
+  CRITICAL
+  HIGH
+  MEDIUM
+  LOW
+  INFO
+}
+
+enum Industry {
+  GENERAL
+  AUTOMOTIVE
+  CONSTRUCTION
+  MANUFACTURING
+  INSURANCE
+  REAL_ESTATE
+}

@@ -1,0 +1,32 @@
+{
+  "name": "@omnireport/infrastructure",
+  "version": "1.0.0",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "build": "tsc --build",
+    "dev": "tsc --build --watch"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.726.0",
+    "@aws-sdk/s3-request-presigner": "^3.726.0",
+    "@google/generative-ai": "^0.21.0",
+    "@prisma/client": "^6.0.1",
+    "bcryptjs": "^2.4.3",
+    "bullmq": "^5.39.0",
+    "ioredis": "^5.5.0",
+    "jsonwebtoken": "^9.0.2",
+    "openai": "^4.82.0",
+    "pdfkit": "^0.15.0",
+    "pg": "^8.13.1",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
+    "@types/jsonwebtoken": "^9.0.7",
+    "@types/node": "^22.10.5",
+    "@types/pdfkit": "^0.17.6",
+    "@types/pg": "^8.11.10",
+    "typescript": "^5.7.2"
+  }
+}
