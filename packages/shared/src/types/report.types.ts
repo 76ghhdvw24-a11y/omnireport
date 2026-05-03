@@ -9,6 +9,7 @@ export interface Finding {
   component?: string;
   condition?: string;
   estimatedCost?: number;
+  quantity?: number;
   urgency?: Severity;
 }
 
@@ -45,10 +46,12 @@ export interface Report {
   aiModel: string | null;
   aiResponseTime: number | null;
   subtotal: number | null;
+  taxRate: number | null;
   tax: number | null;
   total: number | null;
   currency: string | null;
   language: string | null;
+  paymentTerms: string | null;
   metadata: Record<string, unknown> | null;
   tags: string[];
   createdAt: Date;

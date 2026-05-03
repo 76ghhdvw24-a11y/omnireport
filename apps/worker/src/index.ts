@@ -134,10 +134,12 @@ class WorkerReportRepository {
       aiModel: prismaReport.aiModel,
       aiResponseTime: prismaReport.aiResponseTime,
       subtotal: prismaReport.subtotal,
+      taxRate: prismaReport.taxRate,
       tax: prismaReport.tax,
       total: prismaReport.total,
       currency: prismaReport.currency,
       language: prismaReport.language,
+      paymentTerms: prismaReport.paymentTerms,
       metadata: prismaReport.metadata as any,
       tags: prismaReport.tags || [],
       createdAt: prismaReport.createdAt,
@@ -283,9 +285,11 @@ Analise as imagens e/ou transcrição fornecidas para produzir um orçamento té
 
           let subtotal: number | undefined;
           if (analysis.findings) {
-            subtotal = analysis.findings.reduce((sum: number, f: Finding) => sum + (f.estimatedCost || 0), 0);
+            subtotal = analysis.findings.reduce((sum: number, f: Finding) => sum + (f.estimatedCost || 0) * (f.quantity || 1), 0);
           }
-          const total = analysis.estimatedTotalCost || subtotal;
+          const taxRate = (report as any).taxRate ?? 19;
+          const tax = subtotal ? subtotal * (taxRate / 100) : undefined;
+          const total = analysis.estimatedTotalCost || (subtotal && tax ? subtotal + tax : subtotal);
 
           await reportRepo.update(reportId, {
             status: 'COMPLETED',
@@ -295,6 +299,8 @@ Analise as imagens e/ou transcrição fornecidas para produzir um orçamento té
             aiModel: 'google/gemma-4-31b-it',
             aiResponseTime: responseTime,
             subtotal: subtotal,
+            taxRate: taxRate,
+            tax: tax,
             total: total,
             completedAt: new Date(),
           } as any);

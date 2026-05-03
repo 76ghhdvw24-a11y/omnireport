@@ -63,10 +63,12 @@ export function createReportsRoutes(
         aiModel: null,
         aiResponseTime: null,
         subtotal: null,
+        taxRate: null,
         tax: null,
         total: null,
         currency: org?.currency || 'USD',
         language: language || org?.language || 'es',
+        paymentTerms: null,
         metadata: null,
         tags: tags || [],
       } as any);
@@ -125,6 +127,8 @@ export function createReportsRoutes(
         ? await prisma.client.findUnique({ where: { id: report.clientId } })
         : null;
 
+      const org = await prisma.organization.findUnique({ where: { id: req.orgId } });
+
       res.json({
         ...report,
         imageUrls: signedImageUrls,
@@ -136,6 +140,15 @@ export function createReportsRoutes(
           phone: client.phone,
           address: client.address,
           taxId: client.taxId,
+        } : null,
+        organization: org ? {
+          name: org.name,
+          logoUrl: org.logoUrl,
+          address: org.address,
+          phone: org.phone,
+          taxId: org.taxId,
+          currency: org.currency,
+          language: org.language,
         } : null,
       });
     } catch (error) {
@@ -257,7 +270,8 @@ export function createReportsRoutes(
       const allowedFields = [
         'title', 'description', 'imageUrls', 'audioUrl', 'clientId',
         'findings', 'executiveSummary', 'recommendedAction',
-        'subtotal', 'tax', 'total', 'currency', 'language', 'tags', 'severity',
+        'subtotal', 'taxRate', 'tax', 'total', 'currency', 'language', 'tags', 'severity',
+        'paymentTerms',
       ];
 
       for (const field of allowedFields) {

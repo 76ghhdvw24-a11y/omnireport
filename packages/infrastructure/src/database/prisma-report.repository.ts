@@ -56,10 +56,12 @@ export class PrismaReportRepository implements ReportRepository {
         aiModel: data.aiModel,
         aiResponseTime: data.aiResponseTime,
         subtotal: (data as any).subtotal,
+        taxRate: (data as any).taxRate,
         tax: (data as any).tax,
         total: (data as any).total,
         currency: (data as any).currency,
         language: (data as any).language,
+        paymentTerms: (data as any).paymentTerms,
         metadata: data.metadata as any,
         tags: data.tags,
       },
@@ -86,10 +88,12 @@ export class PrismaReportRepository implements ReportRepository {
     if (data.completedAt !== undefined) updateData.completedAt = data.completedAt;
     if ((data as any).clientId !== undefined) updateData.client = { connect: { id: (data as any).clientId } };
     if ((data as any).subtotal !== undefined) updateData.subtotal = (data as any).subtotal;
+    if ((data as any).taxRate !== undefined) updateData.taxRate = (data as any).taxRate;
     if ((data as any).tax !== undefined) updateData.tax = (data as any).tax;
     if ((data as any).total !== undefined) updateData.total = (data as any).total;
     if ((data as any).currency !== undefined) updateData.currency = (data as any).currency;
     if ((data as any).language !== undefined) updateData.language = (data as any).language;
+    if ((data as any).paymentTerms !== undefined) updateData.paymentTerms = (data as any).paymentTerms;
 
     await this.prisma.report.update({
       where: { id },
@@ -132,10 +136,12 @@ export class PrismaReportRepository implements ReportRepository {
       aiModel: prismaReport.aiModel,
       aiResponseTime: prismaReport.aiResponseTime,
       subtotal: prismaReport.subtotal,
+      taxRate: prismaReport.taxRate,
       tax: prismaReport.tax,
       total: prismaReport.total,
       currency: prismaReport.currency,
       language: prismaReport.language,
+      paymentTerms: prismaReport.paymentTerms,
       metadata: prismaReport.metadata as any,
       tags: prismaReport.tags || [],
       createdAt: prismaReport.createdAt,

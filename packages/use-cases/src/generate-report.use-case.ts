@@ -31,7 +31,7 @@ export class GenerateReportUseCase {
         throw new Error('Report not found');
       }
 
-      let transcript = '';
+      let transcript = report.description || '';
       if (report.audioUrl) {
         await this.reportRepo.update(reportId, { status: 'TRANSCRIBING' });
 
@@ -42,10 +42,10 @@ export class GenerateReportUseCase {
           audioUrl: presignedAudioUrl,
           language: 'en',
         });
-        transcript = transcription.text;
+        transcript += (transcript ? '\n\n' : '') + transcription.text;
 
         await this.reportRepo.update(reportId, {
-          audioTranscript: transcript,
+          audioTranscript: transcription.text,
         });
       }
 
@@ -55,21 +55,32 @@ export class GenerateReportUseCase {
         ? await this.reportRepo.getTemplate(report.templateId)
         : null;
 
+      const imageUrls = report.imageUrls || [];
+      const hasMedia = imageUrls.length > 0;
+      const hasContent = transcript.trim().length > 0;
+
       const startTime = Date.now();
 
-      const analysis = await this.geminiService.analyzeMedia({
-        transcript,
-        images: await Promise.all(report.imageUrls.map(async (url: string) => {
-          const key = url.replace(/^https:\/\/[^/]+\//, '');
-          const presignedUrl = await this.s3Service.generatePresignedDownloadUrl(decodeURIComponent(key));
-          return {
-            url: presignedUrl,
-            mimeType: 'image/jpeg',
-          };
-        })),
-        systemPrompt: template?.systemPrompt || this.getDefaultSystemPrompt(),
-        outputFormat: template?.outputFormat || this.getDefaultOutputFormat(),
-      });
+      const analysis = hasMedia
+        ? await this.geminiService.analyzeMedia({
+            transcript,
+            images: await Promise.all(imageUrls.map(async (url: string) => {
+              const key = url.replace(/^https:\/\/[^/]+\//, '');
+              const presignedUrl = await this.s3Service.generatePresignedDownloadUrl(decodeURIComponent(key));
+              return {
+                url: presignedUrl,
+                mimeType: 'image/jpeg',
+              };
+            })),
+            systemPrompt: template?.systemPrompt || this.getDefaultSystemPrompt(),
+            outputFormat: template?.outputFormat || this.getDefaultOutputFormat(),
+          })
+        : await this.geminiService.analyzeMedia({
+            transcript,
+            images: [],
+            systemPrompt: template?.systemPrompt || this.getDefaultSystemPrompt(hasContent),
+            outputFormat: template?.outputFormat || this.getDefaultOutputFormat(),
+          });
 
       const responseTime = Date.now() - startTime;
 
@@ -78,10 +89,10 @@ export class GenerateReportUseCase {
         findings: analysis.findings,
         executiveSummary: analysis.executiveSummary,
         recommendedAction: analysis.recommendedAction,
-        aiModel: 'gemini-1.5-pro',
+        aiModel: hasMedia ? 'gemini-1.5-pro' : 'gemini-1.5-pro',
         aiResponseTime: responseTime,
         completedAt: new Date(),
-      });
+      } as any);
 
     } catch (error) {
       await this.reportRepo.update(reportId, { status: 'FAILED' });
@@ -89,18 +100,26 @@ export class GenerateReportUseCase {
     }
   }
 
-  private getDefaultSystemPrompt(): string {
-    return `You are an expert technical analyst specializing in inspection reports.
+  private getDefaultSystemPrompt(hasDescription?: boolean): string {
+    const base = `You are an expert technical analyst specializing in inspection reports and budget estimates (presupuestos).
 
-Analyze the provided images and transcript to produce a comprehensive technical report.
+Analyze the provided content to produce a comprehensive technical report with itemized costs.
 
 Focus on:
 - Identifying issues and their severity
 - Understanding the context and components involved
 - Providing actionable recommendations
-- Estimating impact and urgency
+- Estimating costs for each finding with quantity and unit price
+- Each finding should include estimatedCost (unit price) and quantity (default 1)
 
-Be precise and technical in your analysis. If information is insufficient, acknowledge limitations rather than making assumptions.`;
+Be precise and technical in your analysis. If information is insufficient, acknowledge limitations rather than making assumptions.
+
+IMPORTANT: Always include findings with estimatedCost and quantity fields. The total for each item is estimatedCost * quantity.`;
+
+    if (!hasDescription) {
+      return base + `\n\nSince no images or audio were provided, generate the budget based solely on the text description. If the description is vague, create a general budget template with the available information.`;
+    }
+    return base;
   }
 
   private getDefaultOutputFormat(): Record<string, unknown> {
@@ -110,6 +129,8 @@ Be precise and technical in your analysis. If information is insufficient, ackno
           description: 'string',
           severity: 'CRITICAL | HIGH | MEDIUM | LOW | INFO',
           confidence: 0.0,
+          estimatedCost: 0,
+          quantity: 1,
         },
       ],
       executiveSummary: 'string',

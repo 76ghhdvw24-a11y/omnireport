@@ -42,7 +42,9 @@ export class Report {
   recommendedAction: string | null;
   aiModel: string | null;
   aiResponseTime: number | null;
-  readonly metadata: Record<string, unknown> | null;
+  readonly taxRate: number | null;
+  paymentTerms: string | null;
+  metadata: Record<string, unknown> | null;
   tags: string[];
   readonly createdAt: Date;
   updatedAt: Date;
@@ -65,6 +67,8 @@ export class Report {
     this.recommendedAction = props.recommendedAction;
     this.aiModel = props.aiModel;
     this.aiResponseTime = props.aiResponseTime;
+    this.taxRate = (props as any).taxRate ?? null;
+    this.paymentTerms = (props as any).paymentTerms ?? null;
     this.metadata = props.metadata;
     this.tags = props.tags;
     this.createdAt = props.createdAt;

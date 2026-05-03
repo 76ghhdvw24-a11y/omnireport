@@ -7,6 +7,7 @@ import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import { FileText, Plus, Loader2 } from 'lucide-react';
 import { NavBar } from '@/components/navbar';
+import { formatCurrency } from '@/lib/formatCurrency';
 
 interface Report {
   id: string;
@@ -78,8 +79,6 @@ export default function DashboardPage() {
     return colors[severity || ''] || 'text-gray-400';
   };
 
-  const cs = (c: string | null | undefined) => (c === 'USD' || !c) ? '$' : ({ USD: '$', EUR: '\u20ac', GBP: '\u00a3', MXN: 'MX$', COP: 'COP$', ARS: 'AR$', BRL: 'R$', PEN: 'S/', CLP: 'CLP$' }[c || 'USD'] || (c || 'USD') + ' ');
-
   if (authLoading) {
     return (<main className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></main>);
   }
@@ -123,7 +122,7 @@ export default function DashboardPage() {
                   </div>
                   <div className="flex items-center gap-3">
                     {report.severity && <span className={`text-xs ${getSeverityColor(report.severity)}`}>{report.severity}</span>}
-                    {report.total != null && <span className="text-xs text-gray-500">{cs(report.currency)}{Number(report.total).toFixed(2)}</span>}
+                    {report.total != null && <span className="text-xs text-gray-500">{formatCurrency(report.total, report.currency)}</span>}
                     <span className={`text-xs px-2 py-1 rounded-full ${getStatusColor(report.status)}`}>{getStatusLabel(report.status)}</span>
                   </div>
                 </Link>

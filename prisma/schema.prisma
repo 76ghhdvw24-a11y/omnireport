@@ -78,10 +78,12 @@ model Report {
   aiResponseTime    Int?
 
   subtotal          Float?
+  taxRate           Float?          @default(19)
   tax               Float?
   total             Float?
-  currency          String?
+  currency          String?         @default("CLP")
   language          String?
+  paymentTerms      String?
 
   metadata          Json?
   tags              String[]

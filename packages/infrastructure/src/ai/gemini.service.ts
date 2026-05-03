@@ -125,6 +125,7 @@ Ensure the response is valid JSON with all required fields.
       component: (f as Record<string, unknown>).component ? String((f as Record<string, unknown>).component) : undefined,
       condition: (f as Record<string, unknown>).condition ? String((f as Record<string, unknown>).condition) : undefined,
       estimatedCost: (f as Record<string, unknown>).estimatedCost ? Number((f as Record<string, unknown>).estimatedCost) : undefined,
+      quantity: (f as Record<string, unknown>).quantity ? Number((f as Record<string, unknown>).quantity) : undefined,
       urgency: (f as Record<string, unknown>).urgency ? String((f as Record<string, unknown>).urgency) as Severity : undefined,
     }));
   }
