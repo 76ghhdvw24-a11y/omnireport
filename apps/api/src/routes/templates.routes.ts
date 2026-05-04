@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, RequestHandler } from 'express';
 import { z } from 'zod';
 import { PrismaTemplateRepository } from '@omnireport/infrastructure';
 import { logger } from '@omnireport/infrastructure';
@@ -20,18 +20,20 @@ const updateTemplateSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
+const adminFallback: RequestHandler = (req, res, next) => next();
+
 export function createTemplatesRoutes(
-  templateRepo: PrismaTemplateRepository
+  templateRepo: PrismaTemplateRepository,
+  adminMiddleware?: RequestHandler
 ): Router {
   const router = Router();
+  const adminCheck = adminMiddleware || adminFallback;
 
   router.get('/', async (req, res) => {
     try {
       if (!req.orgId) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
-
-      const includeInactive = req.query.all === 'true';
 
       const { items, total } = await templateRepo.findByOrganizationId(req.orgId, {
         skip: req.query.skip ? parseInt(req.query.skip as string) : undefined,
@@ -67,7 +69,7 @@ export function createTemplatesRoutes(
     }
   });
 
-  router.post('/', async (req, res) => {
+  router.post('/', adminCheck, async (req, res) => {
     try {
       if (!req.orgId) {
         return res.status(401).json({ error: 'Unauthorized' });
@@ -90,7 +92,7 @@ export function createTemplatesRoutes(
     }
   });
 
-  router.patch('/:id', async (req, res) => {
+  router.patch('/:id', adminCheck, async (req, res) => {
     try {
       if (!req.orgId) {
         return res.status(401).json({ error: 'Unauthorized' });
@@ -101,7 +103,7 @@ export function createTemplatesRoutes(
         return res.status(400).json({ error: 'Invalid input', details: result.error.flatten() });
       }
 
-      const existing = await templateRepo.findById(req.params.id);
+      const existing = await templateRepo.findById(req.params.id as string);
       if (!existing) {
         return res.status(404).json({ error: 'Template not found' });
       }
@@ -110,7 +112,7 @@ export function createTemplatesRoutes(
         return res.status(404).json({ error: 'Template not found' });
       }
 
-      const template = await templateRepo.update(req.params.id, result.data);
+      const template = await templateRepo.update(req.params.id as string, result.data);
 
       res.json(template);
     } catch (error) {
@@ -119,13 +121,13 @@ export function createTemplatesRoutes(
     }
   });
 
-  router.delete('/:id', async (req, res) => {
+  router.delete('/:id', adminCheck, async (req, res) => {
     try {
       if (!req.orgId) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      const existing = await templateRepo.findById(req.params.id);
+      const existing = await templateRepo.findById(req.params.id as string);
       if (!existing) {
         return res.status(404).json({ error: 'Template not found' });
       }
@@ -134,7 +136,7 @@ export function createTemplatesRoutes(
         return res.status(404).json({ error: 'Template not found' });
       }
 
-      await templateRepo.delete(req.params.id);
+      await templateRepo.delete(req.params.id as string);
 
       res.json({ message: 'Template deleted' });
     } catch (error) {

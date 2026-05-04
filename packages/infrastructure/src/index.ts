@@ -13,3 +13,5 @@ export * from './pdf/pdf-generator.service';
 export * from './queue/bullmq.service';
 export * from './logging/logger';
 export * from './monitoring/metrics.service';
+export * from './config/env.schema';
+export * from './config/worker-env.schema';

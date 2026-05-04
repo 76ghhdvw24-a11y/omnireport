@@ -1,8 +1,16 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { Queue, Worker, Job } from 'bullmq';
-import { S3Service, WhisperService, NvidiaService, logger } from '@omnireport/infrastructure';
+import { S3Service, WhisperService, NvidiaService, logger, validateWorkerEnv } from '@omnireport/infrastructure';
 import { Report, Finding } from '@omnireport/shared';
+
+let env: ReturnType<typeof validateWorkerEnv>;
+try {
+  env = validateWorkerEnv();
+} catch (error) {
+  console.error('❌ Invalid environment variables:', error);
+  process.exit(1);
+}
 
 class WorkerReportRepository {
   constructor(private prisma: PrismaClient) {}
@@ -116,13 +124,12 @@ Analise as imagens e/ou transcrição fornecidas para produzir um orçamento té
 
 async function main() {
   const prisma = new PrismaClient();
-  const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
-  logger.info('[Worker] Connecting to Redis at:', redisUrl);
+  logger.info({ redisUrl: env.REDIS_URL }, '[Worker] Connecting to Redis');
 
   const redisConnectionOptions = {
-    host: redisUrl.includes('//') ? new URL(redisUrl).hostname : 'localhost',
-    port: redisUrl.includes('//') ? parseInt(new URL(redisUrl).port) || 6379 : 6379,
+    host: new URL(env.REDIS_URL).hostname,
+    port: parseInt(new URL(env.REDIS_URL).port) || 6379,
     maxRetriesPerRequest: null as null,
     enableReadyCheck: false,
   };
@@ -130,19 +137,19 @@ async function main() {
   const queue = new Queue('reports', { connection: redisConnectionOptions });
 
   const s3Service = new S3Service({
-    region: process.env.AWS_REGION || 'us-east-2',
-    bucket: process.env.AWS_S3_BUCKET || '',
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+    region: env.AWS_REGION,
+    bucket: env.AWS_S3_BUCKET,
+    accessKeyId: env.AWS_ACCESS_KEY_ID,
+    secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
   });
 
   const whisperService = new WhisperService({
-    apiKey: process.env.OPENAI_API_KEY || '',
+    apiKey: env.OPENAI_API_KEY,
     model: 'whisper-1',
   });
 
   const nvidiaService = new NvidiaService({
-    apiKey: process.env.NVIDIA_API_KEY || '',
+    apiKey: env.NVIDIA_API_KEY,
     model: 'google/gemma-4-31b-it',
     temperature: 0.2,
     maxTokens: 16384,
@@ -264,7 +271,7 @@ async function main() {
   });
 
   worker.on('failed', (job, err) => {
-    logger.error(`Job ${job?.id} failed:`, err.message);
+    logger.error({ jobId: job?.id, error: err.message }, 'Job failed');
   });
 
   const shutdown = async (signal: string) => {

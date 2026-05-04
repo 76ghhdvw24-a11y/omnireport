@@ -87,8 +87,8 @@ describe('calculateCosts', () => {
   it('should calculate subtotal from findings', () => {
     const analysis: Analysis = {
       findings: [
-        { id: '1', description: 'Fix A', severity: 'HIGH', estimatedCost: 100, quantity: 2 },
-        { id: '2', description: 'Fix B', severity: 'LOW', estimatedCost: 50, quantity: 1 },
+        { description: 'Fix A', severity: 'HIGH', estimatedCost: 100, quantity: 2, confidence: 0.9 },
+        { description: 'Fix B', severity: 'LOW', estimatedCost: 50, quantity: 1, confidence: 0.8 },
       ],
     };
     const report: Report = { taxRate: 19 };
@@ -102,7 +102,7 @@ describe('calculateCosts', () => {
 
   it('should use default tax rate of 19 when not specified', () => {
     const analysis: Analysis = {
-      findings: [{ id: '1', description: 'Fix', severity: 'HIGH', estimatedCost: 100, quantity: 1 }],
+      findings: [{ description: 'Fix', severity: 'HIGH', estimatedCost: 100, quantity: 1, confidence: 0.9 }],
     };
     const report: Report = {};
 
@@ -142,8 +142,8 @@ describe('calculateCosts', () => {
   it('should handle findings with missing estimatedCost', () => {
     const analysis: Analysis = {
       findings: [
-        { id: '1', description: 'Fix A', severity: 'HIGH' },
-        { id: '2', description: 'Fix B', severity: 'LOW', estimatedCost: 50 },
+        { description: 'Fix A', severity: 'HIGH', confidence: 0.9 },
+        { description: 'Fix B', severity: 'LOW', estimatedCost: 50, confidence: 0.8 },
       ],
     };
     const report: Report = { taxRate: 19 };
@@ -158,7 +158,7 @@ describe('calculateCosts', () => {
   it('should handle findings with missing quantity', () => {
     const analysis: Analysis = {
       findings: [
-        { id: '1', description: 'Fix', severity: 'HIGH', estimatedCost: 100 },
+        { description: 'Fix', severity: 'HIGH', estimatedCost: 100, confidence: 0.9 },
       ],
     };
     const report: Report = { taxRate: 10 };
@@ -172,7 +172,7 @@ describe('calculateCosts', () => {
 
   it('should use custom tax rate from report', () => {
     const analysis: Analysis = {
-      findings: [{ id: '1', description: 'Fix', severity: 'HIGH', estimatedCost: 200 }],
+      findings: [{ description: 'Fix', severity: 'HIGH', estimatedCost: 200, confidence: 0.9 }],
     };
     const report: Report = { taxRate: 21 };
 
@@ -185,7 +185,7 @@ describe('calculateCosts', () => {
 
   it('should prioritize estimatedTotalCost over calculated total', () => {
     const analysis: Analysis = {
-      findings: [{ id: '1', description: 'Fix', severity: 'HIGH', estimatedCost: 100 }],
+      findings: [{ description: 'Fix', severity: 'HIGH', estimatedCost: 100, confidence: 0.9 }],
       estimatedTotalCost: 1000,
     };
     const report: Report = { taxRate: 19 };
@@ -198,7 +198,7 @@ describe('calculateCosts', () => {
   it('should handle decimal costs', () => {
     const analysis: Analysis = {
       findings: [
-        { id: '1', description: 'Fix', severity: 'HIGH', estimatedCost: 99.99, quantity: 3 },
+        { description: 'Fix', severity: 'HIGH', estimatedCost: 99.99, quantity: 3, confidence: 0.9 },
       ],
     };
     const report: Report = { taxRate: 19 };

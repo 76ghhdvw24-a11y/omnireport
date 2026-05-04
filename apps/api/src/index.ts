@@ -10,6 +10,7 @@ import {
   NvidiaService, WhisperService,
   PrismaReportRepository, PrismaUserRepository, PrismaOrganizationRepository, PrismaClientRepository, PrismaTemplateRepository,
   logger, TokenBlacklistService,
+  validateEnv,
 } from '@omnireport/infrastructure';
 import { createMetricsRoutes } from './routes/metrics.routes';
 import { ProcessMediaUseCase } from '@omnireport/use-cases';
@@ -24,22 +25,18 @@ import { createClientsRoutes } from './routes/clients.routes';
 import { createTemplatesRoutes } from './routes/templates.routes';
 import { createChatRoutes } from './routes/chat.routes';
 
-const app = express();
-const PORT = process.env.PORT || 3000;
-
-const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
-const DEFAULT_SECRETS = ['your-secret-key', 'your-secret-key-change-in-production', 'your-super-secret-jwt-key-change-in-production'];
-
-if (DEFAULT_SECRETS.includes(JWT_SECRET)) {
-  if (process.env.NODE_ENV === 'production') {
-    logger.fatal('JWT_SECRET is using a default value. Set a secure JWT_SECRET before running in production.');
-    process.exit(1);
-  } else {
-    logger.warn('JWT_SECRET is using a default value. Set JWT_SECRET to a secure random string.');
-  }
+let env: ReturnType<typeof validateEnv>;
+try {
+  env = validateEnv();
+} catch (error) {
+  console.error('❌ Invalid environment variables:', error);
+  process.exit(1);
 }
 
-const allowedOrigins = (process.env.CORS_ORIGINS || 'http://localhost:3001,http://localhost:3000').split(',');
+const app = express();
+const PORT = env.PORT;
+
+const allowedOrigins = (env.CORS_ORIGINS || 'http://localhost:3001,http://localhost:3000').split(',');
 
 app.use(helmet());
 app.use(cors({
@@ -100,14 +97,14 @@ const clientRepo = new PrismaClientRepository(prisma);
 const templateRepo = new PrismaTemplateRepository(prisma);
 
 const s3Service = new S3Service({
-  region: process.env.AWS_REGION || 'us-east-2',
-  bucket: process.env.AWS_S3_BUCKET || '',
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
+  region: env.AWS_REGION,
+  bucket: env.AWS_S3_BUCKET,
+  accessKeyId: env.AWS_ACCESS_KEY_ID,
+  secretAccessKey: env.AWS_SECRET_ACCESS_KEY,
 });
 
 const jwtService = new JWTService({
-  secret: process.env.JWT_SECRET || 'your-secret-key',
+  secret: env.JWT_SECRET,
   accessTokenExpiresIn: '15m',
   refreshTokenExpiresIn: '7d',
   issuer: 'omnireport.ai',
@@ -116,7 +113,7 @@ const jwtService = new JWTService({
 const passwordService = new PasswordService();
 
 const queueService = new QueueService({
-  redisUrl: process.env.REDIS_URL || 'redis://localhost:6379',
+  redisUrl: env.REDIS_URL,
   queueName: 'reports',
 });
 
@@ -124,20 +121,18 @@ const processMediaUseCase = new ProcessMediaUseCase({ s3Service });
 const pdfService = new PDFGeneratorService();
 
 const nvidiaService = new NvidiaService({
-  apiKey: process.env.NVIDIA_API_KEY || '',
+  apiKey: env.NVIDIA_API_KEY,
   model: 'google/gemma-4-31b-it',
   temperature: 0.3,
   maxTokens: 4096,
 });
 
 const whisperService = new WhisperService({
-  apiKey: process.env.OPENAI_API_KEY || '',
+  apiKey: env.OPENAI_API_KEY,
   model: 'whisper-1',
 });
 
-const tokenBlacklist = process.env.REDIS_URL
-  ? new TokenBlacklistService(process.env.REDIS_URL)
-  : undefined;
+const tokenBlacklist = new TokenBlacklistService(env.REDIS_URL);
 
 const authMiddleware = createAuthMiddleware(jwtService, tokenBlacklist);
 
@@ -153,8 +148,8 @@ const reportsRouter = createReportsRoutes(prisma, processMediaUseCase, queueServ
 app.use('/api/v1/reports', authMiddleware, reportCreationLimiter, reportsRouter);
 
 app.use('/api/v1/organization', authMiddleware, createOrganizationRoutes(prisma, orgRepo, s3Service, passwordService));
-app.use('/api/v1/clients', authMiddleware, createClientsRoutes(clientRepo));
-app.use('/api/v1/templates', authMiddleware, createTemplatesRoutes(templateRepo));
+app.use('/api/v1/clients', authMiddleware, createClientsRoutes(clientRepo, requireRole('ADMIN')));
+app.use('/api/v1/templates', authMiddleware, createTemplatesRoutes(templateRepo, requireRole('ADMIN')));
 
 app.get('/', (req, res) => {
   res.json({
@@ -190,9 +185,7 @@ const gracefulShutdown = async (signal: string) => {
   server.close(async () => {
     await prisma.$disconnect();
     await queueService.close();
-    if (tokenBlacklist) {
-      await tokenBlacklist.close();
-    }
+    await tokenBlacklist.close();
     process.exit(0);
   });
 };

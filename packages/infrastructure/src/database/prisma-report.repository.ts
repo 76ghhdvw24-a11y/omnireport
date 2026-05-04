@@ -17,7 +17,7 @@ export class PrismaReportRepository implements ReportRepository {
   ): Promise<{ items: Report[]; total: number }> {
     const where: Prisma.ReportWhereInput = { organizationId };
     if (options?.status) {
-      where.status = options.status as any;
+      where.status = options.status as 'PENDING' | 'PROCESSING' | 'TRANSCRIBING' | 'ANALYZING' | 'COMPLETED' | 'DRAFT' | 'APPROVED' | 'FAILED';
     }
     if (options?.search) {
       where.title = { contains: options.search, mode: 'insensitive' };
@@ -48,8 +48,8 @@ export class PrismaReportRepository implements ReportRepository {
         id: data.id,
         title: data.title,
         description: data.description,
-        status: data.status,
-        severity: data.severity,
+        status: data.status as 'PENDING' | 'PROCESSING' | 'TRANSCRIBING' | 'ANALYZING' | 'COMPLETED' | 'DRAFT' | 'APPROVED' | 'FAILED',
+        severity: data.severity as 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO' | null,
         organizationId: data.organizationId,
         userId: data.userId,
         templateId: data.templateId,
@@ -80,17 +80,17 @@ export class PrismaReportRepository implements ReportRepository {
     const updateData: Prisma.ReportUpdateInput = {};
     if (data.title !== undefined) updateData.title = data.title;
     if (data.description !== undefined) updateData.description = data.description;
-    if (data.status !== undefined) updateData.status = data.status as any;
-    if (data.severity !== undefined) updateData.severity = data.severity as any;
+    if (data.status !== undefined) updateData.status = data.status as 'PENDING' | 'PROCESSING' | 'TRANSCRIBING' | 'ANALYZING' | 'COMPLETED' | 'DRAFT' | 'APPROVED' | 'FAILED';
+    if (data.severity !== undefined) updateData.severity = data.severity as 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW' | 'INFO' | null;
     if (data.audioUrl !== undefined) updateData.audioUrl = data.audioUrl;
     if (data.audioTranscript !== undefined) updateData.audioTranscript = data.audioTranscript;
     if (data.imageUrls !== undefined) updateData.imageUrls = data.imageUrls;
-    if (data.findings !== undefined) updateData.findings = data.findings as any;
+    if (data.findings !== undefined) updateData.findings = data.findings as unknown as Prisma.InputJsonValue;
     if (data.executiveSummary !== undefined) updateData.executiveSummary = data.executiveSummary;
     if (data.recommendedAction !== undefined) updateData.recommendedAction = data.recommendedAction;
     if (data.aiModel !== undefined) updateData.aiModel = data.aiModel;
     if (data.aiResponseTime !== undefined) updateData.aiResponseTime = data.aiResponseTime;
-    if (data.metadata !== undefined) updateData.metadata = data.metadata as any;
+    if (data.metadata !== undefined) updateData.metadata = data.metadata as unknown as Prisma.InputJsonValue;
     if (data.tags !== undefined) updateData.tags = data.tags;
     if (data.completedAt !== undefined) updateData.completedAt = data.completedAt;
     if (data.clientId !== undefined && data.clientId !== null) updateData.client = { connect: { id: data.clientId } };
@@ -124,13 +124,13 @@ export class PrismaReportRepository implements ReportRepository {
     };
   }
 
-  private mapToReport(prismaReport: any): Report {
+  private mapToReport(prismaReport: Prisma.ReportGetPayload<object>): Report {
     return {
       id: prismaReport.id,
       title: prismaReport.title,
       description: prismaReport.description,
-      status: prismaReport.status,
-      severity: prismaReport.severity,
+      status: prismaReport.status as Report['status'],
+      severity: prismaReport.severity as Report['severity'],
       organizationId: prismaReport.organizationId,
       userId: prismaReport.userId,
       templateId: prismaReport.templateId,

@@ -1,4 +1,4 @@
-import { Router } from 'express';
+import { Router, RequestHandler } from 'express';
 import { z } from 'zod';
 import { PrismaClientRepository } from '@omnireport/infrastructure';
 import { logger } from '@omnireport/infrastructure';
@@ -19,8 +19,14 @@ const updateClientSchema = z.object({
   taxId: z.string().optional().nullable(),
 });
 
-export function createClientsRoutes(clientRepo: PrismaClientRepository): Router {
+const adminFallback: RequestHandler = (req, res, next) => next();
+
+export function createClientsRoutes(
+  clientRepo: PrismaClientRepository,
+  adminMiddleware?: RequestHandler
+): Router {
   const router = Router();
+  const adminCheck = adminMiddleware || adminFallback;
 
   router.get('/', async (req, res) => {
     try {
@@ -37,7 +43,7 @@ export function createClientsRoutes(clientRepo: PrismaClientRepository): Router 
     }
   });
 
-  router.post('/', async (req, res) => {
+  router.post('/', adminCheck, async (req, res) => {
     try {
       if (!req.orgId) {
         return res.status(401).json({ error: 'Unauthorized' });
@@ -57,7 +63,7 @@ export function createClientsRoutes(clientRepo: PrismaClientRepository): Router 
     }
   });
 
-  router.patch('/:id', async (req, res) => {
+  router.patch('/:id', adminCheck, async (req, res) => {
     try {
       if (!req.orgId) {
         return res.status(401).json({ error: 'Unauthorized' });
@@ -68,12 +74,12 @@ export function createClientsRoutes(clientRepo: PrismaClientRepository): Router 
         return res.status(400).json({ error: 'Invalid input', details: result.error.flatten() });
       }
 
-      const existing = await clientRepo.findById(req.params.id);
+      const existing = await clientRepo.findById(req.params.id as string);
       if (!existing || existing.organizationId !== req.orgId) {
         return res.status(404).json({ error: 'Client not found' });
       }
 
-      const client = await clientRepo.update(req.params.id, result.data);
+      const client = await clientRepo.update(req.params.id as string, result.data);
 
       res.json(client);
     } catch (error) {
@@ -82,18 +88,18 @@ export function createClientsRoutes(clientRepo: PrismaClientRepository): Router 
     }
   });
 
-  router.delete('/:id', async (req, res) => {
+  router.delete('/:id', adminCheck, async (req, res) => {
     try {
       if (!req.orgId) {
         return res.status(401).json({ error: 'Unauthorized' });
       }
 
-      const existing = await clientRepo.findById(req.params.id);
+      const existing = await clientRepo.findById(req.params.id as string);
       if (!existing || existing.organizationId !== req.orgId) {
         return res.status(404).json({ error: 'Client not found' });
       }
 
-      await clientRepo.delete(req.params.id);
+      await clientRepo.delete(req.params.id as string);
 
       res.json({ message: 'Client deleted' });
     } catch (error) {
