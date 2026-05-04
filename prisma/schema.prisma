@@ -16,7 +16,7 @@ model Organization {
   phone       String?
   taxId       String?
   country     String?
-  currency    String   @default("USD")
+  currency    String   @default("CLP")
   language    String   @default("es")
   plan        Plan     @default(FREE)
   maxReports  Int      @default(10)

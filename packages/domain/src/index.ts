@@ -3,3 +3,7 @@ export * from './entities/organization.entity';
 export * from './entities/report.entity';
 export * from './entities/template.entity';
 export * from './repositories/report.repository';
+export * from './repositories/user.repository';
+export * from './repositories/organization.repository';
+export * from './repositories/client.repository';
+export * from './repositories/template.repository';

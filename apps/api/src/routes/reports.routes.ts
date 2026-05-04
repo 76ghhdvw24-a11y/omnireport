@@ -101,7 +101,7 @@ export function createReportsRoutes(
         taxRate: null,
         tax: null,
         total: null,
-        currency: org?.currency || 'USD',
+        currency: org?.currency || 'CLP',
         language: language || org?.language || 'es',
         paymentTerms: null,
         metadata: null,

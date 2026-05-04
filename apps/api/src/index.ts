@@ -11,9 +11,11 @@ import {
   PrismaReportRepository, PrismaUserRepository, PrismaOrganizationRepository, PrismaClientRepository, PrismaTemplateRepository,
   logger, TokenBlacklistService,
 } from '@omnireport/infrastructure';
+import { createMetricsRoutes } from './routes/metrics.routes';
 import { ProcessMediaUseCase } from '@omnireport/use-cases';
 import { createAuthMiddleware, requireRole } from './middleware/auth.middleware';
 import { AppError } from './middleware/errors';
+import { metricsMiddleware } from './middleware/metrics.middleware';
 import { createHealthRoutes } from './routes/health.routes';
 import { createReportsRoutes } from './routes/reports.routes';
 import { createAuthRoutes } from './routes/auth.routes';
@@ -87,6 +89,8 @@ app.use((req, res, next) => {
   next();
 });
 
+app.use(metricsMiddleware);
+
 const prisma = new PrismaClient();
 
 const reportRepo = new PrismaReportRepository(prisma);
@@ -138,6 +142,7 @@ const tokenBlacklist = process.env.REDIS_URL
 const authMiddleware = createAuthMiddleware(jwtService, tokenBlacklist);
 
 app.use('/health', createHealthRoutes());
+app.use('/metrics', createMetricsRoutes());
 app.use('/api/v1/auth', authLimiter, createAuthRoutes(prisma, userRepo, orgRepo, passwordService, jwtService, tokenBlacklist));
 
 app.use('/api/v1', apiLimiter);

@@ -90,7 +90,7 @@
 - **Archivos:** `apps/api/src/routes/auth.routes.ts`
 
 ### 🟡 A4 — Eliminar código muerto o conectar servicios existentes
-- **Estado:** ⬜
+- **Estado:** 🔄 (2026-05-04) — GeminiService y GenerateReportUseCase eliminados. Repositorios Prisma siga en uso.
 - **Detalle:** ~500 líneas de código no usado: `GeminiService`, `NvidiaService` (infra), `PrismaOrganizationRepository`, `PrismaClientRepository`, `PrismaUserRepository`, `GenerateReportUseCase`. Decidir si conectarlos o eliminarlos.
 - **Archivos:** `packages/infrastructure/src/`, `packages/use-cases/src/`
 
@@ -100,14 +100,14 @@
 - **Archivos:** `packages/shared/src/types/report.types.ts`, `packages/infrastructure/src/database/prisma-report.repository.ts`, `apps/worker/src/index.ts`
 
 ### 🟢 A6 — Agregar interfaces de repositorio faltantes al dominio
-- **Estado:** ⬜
-- **Detalle:** No existen interfaces para: `UserRepository`, `OrganizationRepository`, `ClientRepository`, `TemplateRepository`, `ChatMessageRepository`. Solo existe `ReportRepository`. Agregar contratos en `packages/domain/src/repositories/`.
-- **Archivos:** `packages/domain/src/repositories/`
+- **Estado:** ✅ (2026-05-04)
+- **Detalle:** Creadas interfaces en `packages/domain/src/repositories/`: `UserRepository`, `OrganizationRepository`, `ClientRepository`, `TemplateRepository`. Exportadas desde `@omnireport/domain`. `ChatMessageRepository` pendiente si se necesita.
+- **Archivos:** `packages/domain/src/repositories/user.repository.ts`, `organization.repository.ts`, `client.repository.ts`, `template.repository.ts`
 
 ### 🟢 A7 — Consistencia de default de moneda
-- **Estado:** ⬜
-- **Detalle:** El schema Prisma usa `CLP` como default, la documentación dice `USD`, y la UI tiene texto en español. Unificar el default a `CLP` (mercado chileno) o hacerlo configurable.
-- **Archivos:** `prisma/schema.prisma`, `packages/shared/`, PDF generator
+- **Estado:** ✅ (2026-05-04)
+- **Detalle:** `Organization.currency` y `Report.currency` unificados a `CLP`. Actualizado `prisma/schema.prisma`, `prisma/migrations/01_initial_schema.sql`, y `reports.routes.ts` fallback.
+- **Archivos:** `prisma/schema.prisma`, `prisma/migrations/01_initial_schema.sql`, `apps/api/src/routes/reports.routes.ts`
 
 ---
 
@@ -124,9 +124,9 @@
 - **Archivos:** `docker-compose.yml`
 
 ### 🟢 I3 — Sistema de migraciones real
-- **Estado:** ⬜
-- **Detalle:** El proyecto usa `prisma db push` en vez de migraciones formales. Solo existe una migración SQL manual (`02_add_row_level_security.sql`). Migrar a `prisma migrate dev` como flujo estándar.
-- **Archivos:** `prisma/`, scripts
+- **Estado:** ✅ (2026-05-04)
+- **Detalle:** Creada migración inicial `01_initial_schema.sql` con todos los modelos (Organization, User, Report, Template, Client, ChatMessage), enums, índices y triggers. Renombrada migración RLS con timestamp. Base de datos existente requiere `prisma migrate resolve --applied 01_initial_schema` para marcar como aplicada.
+- **Archivos:** `prisma/migrations/01_initial_schema.sql`, `prisma/migrations/20240301000000_add_row_level_security.sql`
 
 ### 🟢 I4 — Logging estructurado
 - **Estado:** ✅ (2026-05-04)
@@ -134,8 +134,9 @@
 - **Archivos:** `packages/infrastructure/src/logging/logger.ts`, `apps/api/src/routes/*.ts`, `apps/worker/src/index.ts`
 
 ### 🔵 I5 — Monitoreo y métricas
-- **Estado:** ⬜
-- **Detalle:** Sin métricas de API (latencia, throughput, errores), worker (jobs procesados, fallos), ni S3 (uploads, tamaño). Agregar endpoint `/metrics` con Prometheus o similar.
+- **Estado:** ✅ (2026-05-04)
+- **Detalle:** Endpoint `GET /metrics` con `prom-client`. Métricas: http_requests_total, http_request_duration_seconds, http_active_connections, reports_generated_total, report_generation_duration_seconds, ai_api_calls_total, ai_api_latency_seconds, queue_jobs_total. Middleware de tracking para todas las requests.
+- **Archivos:** `packages/infrastructure/src/monitoring/metrics.service.ts`, `apps/api/src/routes/metrics.routes.ts`, `apps/api/src/middleware/metrics.middleware.ts`
 
 ---
 
@@ -240,9 +241,9 @@
 - **Archivos:** `packages/infrastructure/src/**/*.test.ts`
 
 ### 🟢 T4 — Tests del frontend
-- **Estado:** ⬜
+- **Estado:** 🔄 (2026-05-04) — 22 tests web (Button 6, Badge 3, Card 5, HeroSection 6 + setup infrastructure). Setup: Jest + jsdom + @testing-library/react.
 - **Detalle:** 0 tests para componentes React. Agregar tests unitarios con React Testing Library para componentes clave (EditableField, ChatPanel, Dashboard).
-- **Archivos:** Nuevo directorio `apps/web/src/__tests__/`
+- **Archivos:** `apps/web/src/__tests__/`
 
 ### 🔵 T5 — Tests E2E
 - **Estado:** ⬜
@@ -283,9 +284,9 @@
 | FASE 2 — Interactividad | ~95% | Chat completo, template selection en UI, edición inline ✅ |
 | FASE 3 — UI/UX Profesional | ~95% | F1✅ F2✅ F3✅ F4✅ F5✅ F6✅ F7✅ F9✅ F10✅, pendiente F8 (email) |
 | Seguridad | ~95% | S1✅ S2✅ S3✅ S4✅ S5✅ S6✅ S7✅ S8✅ S9✅ S10✅ |
-| Testing | ~40% | 46 tests pasando (API + infra), falta worker/frontend/E2E |
-| Arquitectura Limpia | ~85% | A1✅ A2✅ A3✅ A5✅ C3✅, falta A4 A6 A7 |
-| Infraestructura | ~70% | I1✅ I2✅ I4✅, pendiente I3 I5 |
+| Testing | ~75% | 83 tests pasando (46 API+infra, 17 worker, 20 web), falta ChatPanel/Dashboard |
+| Arquitectura Limpia | ~95% | A1✅ A2✅ A3✅ A4🔄 A5✅ A6✅ A7✅ C3✅ |
+| Infraestructura | ~100% | I1✅ I2✅ I3✅ I4✅ I5✅ |
 | Frontend | ~100% | F1✅ F2✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8⬜ F9✅ F10✅ |
 
 ---

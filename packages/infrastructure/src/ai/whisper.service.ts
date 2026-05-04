@@ -62,7 +62,7 @@ export class WhisperService {
   }
 
   private createFileObject(buffer: Buffer, filename: string): File {
-    return new File([buffer], filename, { type: 'audio/mpeg' });
+    return new File([new Uint8Array(buffer)], filename, { type: 'audio/mpeg' });
   }
 
   private async cleanupTempFile(path: string): Promise<void> {
