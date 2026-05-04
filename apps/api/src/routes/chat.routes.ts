@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
 import multer from 'multer';
 import { S3Service, NvidiaService, WhisperService } from '@omnireport/infrastructure';
+import { logger } from '@omnireport/infrastructure';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
 
@@ -137,7 +138,7 @@ export function createChatRoutes(prisma: PrismaClient, s3Service: S3Service, nvi
         items: messages.map((m: any) => ({ id: m.id, reportId: m.reportId, role: m.role, content: m.content, createdAt: m.createdAt })),
       });
     } catch (error) {
-      console.error('Error getting chat messages:', error);
+      logger.error({ err: error }, 'Error getting chat messages');
       res.status(500).json({ error: 'Failed to get chat messages' });
     }
   });
@@ -169,7 +170,7 @@ export function createChatRoutes(prisma: PrismaClient, s3Service: S3Service, nvi
         });
         transcription = transcriptionResult.text;
       } catch (err) {
-        console.error('Transcription error:', err);
+        logger.error({ err }, 'Transcription error');
         return res.status(500).json({ error: 'Failed to transcribe audio' });
       }
 
@@ -234,7 +235,7 @@ export function createChatRoutes(prisma: PrismaClient, s3Service: S3Service, nvi
         suggestions: suggestions.length > 0 ? suggestions : undefined,
       });
     } catch (error) {
-      console.error('Error in audio chat:', error);
+      logger.error({ err: error }, 'Error in audio chat');
       res.status(500).json({ error: 'Failed to process audio chat' });
     }
   });
@@ -318,7 +319,7 @@ export function createChatRoutes(prisma: PrismaClient, s3Service: S3Service, nvi
         suggestions: suggestions.length > 0 ? suggestions : undefined,
       });
     } catch (error) {
-      console.error('Error in chat:', error);
+      logger.error({ err: error }, 'Error in chat');
       res.status(500).json({ error: 'Failed to process chat message' });
     }
   });

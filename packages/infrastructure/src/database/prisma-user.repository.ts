@@ -32,4 +32,18 @@ export class PrismaUserRepository {
       },
     });
   }
+
+  async update(id: string, data: {
+    email?: string;
+    passwordHash?: string;
+    firstName?: string;
+    lastName?: string;
+    role?: 'ADMIN' | 'MEMBER';
+    isActive?: boolean;
+  }) {
+    return this.prisma.user.update({
+      where: { id },
+      data,
+    });
+  }
 }

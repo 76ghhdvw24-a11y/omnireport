@@ -1,7 +1,7 @@
 import 'dotenv/config';
 import { PrismaClient } from '@prisma/client';
 import { Queue, Worker, Job } from 'bullmq';
-import { S3Service, WhisperService, NvidiaService } from '@omnireport/infrastructure';
+import { S3Service, WhisperService, NvidiaService, logger } from '@omnireport/infrastructure';
 import { Report, Finding } from '@omnireport/shared';
 
 class WorkerReportRepository {
@@ -118,7 +118,7 @@ async function main() {
   const prisma = new PrismaClient();
   const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
 
-  console.log('[Worker] Connecting to Redis at:', redisUrl);
+  logger.info('[Worker] Connecting to Redis at:', redisUrl);
 
   const redisConnectionOptions = {
     host: redisUrl.includes('//') ? new URL(redisUrl).hostname : 'localhost',
@@ -150,7 +150,7 @@ async function main() {
 
   const reportRepo = new WorkerReportRepository(prisma);
 
-  console.log('Worker started, waiting for jobs...');
+  logger.info('Worker started, waiting for jobs...');
 
   const extractS3Key = (url: string): string => {
     return decodeURIComponent(url.replace(/^https:\/\/[^/]+\//, ''));
@@ -161,7 +161,7 @@ async function main() {
     async (job: Job) => {
       if (job.name === 'generate-report') {
         const { reportId } = job.data as { reportId: string };
-        console.log(`Processing report: ${reportId}`);
+        logger.info(`Processing report: ${reportId}`);
 
         try {
           await reportRepo.update(reportId, { status: 'PROCESSING' });
@@ -171,7 +171,7 @@ async function main() {
 
           const language = report.language || 'es';
 
-          console.log(`[Worker] Generating presigned URLs for ${report.imageUrls.length} images`);
+          logger.info(`[Worker] Generating presigned URLs for ${report.imageUrls.length} images`);
           const presignedImageUrls = await Promise.all(
             report.imageUrls.map((url: string) => s3Service.generatePresignedDownloadUrl(extractS3Key(url)))
           );
@@ -244,9 +244,9 @@ async function main() {
             completedAt: new Date(),
           } as any);
 
-          console.log(`Finished report: ${reportId}`);
+          logger.info(`Finished report: ${reportId}`);
         } catch (error: any) {
-          console.error(`Error processing report ${reportId}:`, error.message);
+          logger.error(`Error processing report ${reportId}:`, error.message);
           await reportRepo.update(reportId, { status: 'FAILED' });
           throw error;
         }
@@ -260,15 +260,15 @@ async function main() {
   );
 
   worker.on('completed', (job) => {
-    console.log(`Job ${job.id} completed`);
+    logger.info(`Job ${job.id} completed`);
   });
 
   worker.on('failed', (job, err) => {
-    console.error(`Job ${job?.id} failed:`, err.message);
+    logger.error(`Job ${job?.id} failed:`, err.message);
   });
 
   const shutdown = async (signal: string) => {
-    console.log(`${signal} received, shutting down worker...`);
+    logger.info(`${signal} received, shutting down worker...`);
     await worker.close();
     await queue.close();
     await prisma.$disconnect();
@@ -280,6 +280,6 @@ async function main() {
 }
 
 main().catch((error) => {
-  console.error('Worker crashed:', error);
+  logger.error('Worker crashed:', error);
   process.exit(1);
 });

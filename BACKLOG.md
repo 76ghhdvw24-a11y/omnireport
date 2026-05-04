@@ -1,6 +1,6 @@
 # OmniReport AI — Backlog de Tareas
 
-> Última actualización: 2026-05-03
+> Última actualización: 2026-05-04
 
 ## Leyenda
 
@@ -64,9 +64,9 @@
 - **Archivos:** `apps/api/src/index.ts`
 
 ### 🟢 S9 — Revocación de refresh tokens
-- **Estado:** ⬜
-- **Detalle:** No hay mecanismo para invalidar refresh tokens. Agregar tabla o blacklist en Redis para tokens revocados.
-- **Archivos:** Nuevo modelo/tabla, auth routes
+- **Estado:** ✅ (2026-05-04)
+- **Detalle:** `TokenBlacklistService` implementado con Redis. Verifica tokens revocados en auth middleware y en refresh. Endpoint `POST /api/v1/auth/logout` revoca access + refresh tokens con TTL.
+- **Archivos:** `packages/infrastructure/src/auth/token-blacklist.service.ts`, `apps/api/src/middleware/auth.middleware.ts`, `apps/api/src/routes/auth.routes.ts`
 
 
 
@@ -80,14 +80,14 @@
 - **Archivos:** `apps/worker/src/index.ts`, `packages/infrastructure/src/ai/nvidia.service.ts`
 
 ### 🟡 A2 — Refactorizar chat routes para usar servicios de infraestructura
-- **Estado:** ⬜
-- **Detalle:** `chat.routes.ts` crea `S3Client` inline (líneas 229-235), tiene funciones `transcribeAudio()` y `callAI()` que duplican `WhisperService` y `NvidiaService`. Refactorizar para recibir servicios por DI como las demás rutas.
+- **Estado:** ✅ (2026-05-03)
+- **Detalle:** `chat.routes.ts` ahora importa `S3Service`, `NvidiaService` y `WhisperService` desde `@omnireport/infrastructure`. Eliminado código inline duplicado.
 - **Archivos:** `apps/api/src/routes/chat.routes.ts`
 
 ### 🟡 A3 — Aplicar repository pattern en todas las rutas
-- **Estado:** ⬜
-- **Detalle:** Solo `reports.routes.ts` usa `PrismaReportRepository`. Las rutas de auth, organization, clients y templates usan Prisma directamente. Migrar a usar los repositorios que ya existen en `packages/infrastructure/src/database/`.
-- **Archivos:** `apps/api/src/routes/auth.routes.ts`, `organization.routes.ts`, `clients.routes.ts`, `templates.routes.ts`
+- **Estado:** ✅ (2026-05-04) — Parcial
+- **Detalle:** `auth.routes.ts` ahora usa `PrismaOrganizationRepository` y `PrismaUserRepository`. `clients.routes.ts` y `templates.routes.ts` ya usaban repositorios. `organization.routes.ts` ya usa `PrismaOrganizationRepository`. Falta: `chat.routes.ts` (usa Prisma directo).
+- **Archivos:** `apps/api/src/routes/auth.routes.ts`
 
 ### 🟡 A4 — Eliminar código muerto o conectar servicios existentes
 - **Estado:** ⬜
@@ -129,9 +129,9 @@
 - **Archivos:** `prisma/`, scripts
 
 ### 🟢 I4 — Logging estructurado
-- **Estado:** ⬜
-- **Detalle:** Solo se usa `morgan` para HTTP logging. Agregar `winston` o `pino` con logging estructurado (JSON) para producción, con niveles por servicio.
-- **Archivos:** Nuevo paquete de logging, `apps/api/src/index.ts`, `apps/worker/src/index.ts`
+- **Estado:** ✅ (2026-05-04)
+- **Detalle:** `pino` instalado con `pino-pretty` para desarrollo. Logger exportado desde `packages/infrastructure`. Reemplazados todos los `console.log`/`console.error` en API y worker. Error handler incluye contexto (orgId, requestId).
+- **Archivos:** `packages/infrastructure/src/logging/logger.ts`, `apps/api/src/routes/*.ts`, `apps/worker/src/index.ts`
 
 ### 🔵 I5 — Monitoreo y métricas
 - **Estado:** ⬜
@@ -186,6 +186,11 @@
 - **Detalle:** Detección de transición de estado en polling: cuando un reporte pasa de PROCESSING/TRANSCRIBING/ANALYZING a COMPLETED o FAILED, se muestra toast con link al detalle. Implementado tanto en dashboard como en vista de reporte.
 - **Archivos:** `apps/web/src/app/dashboard/page.tsx`, `apps/web/src/app/reports/[id]/page.tsx`
 
+### 🟢 F10 — Landing page de marketing
+- **Estado:** ✅ (2026-05-04)
+- **Detalle:** Landing page completa en `/` con redirección inteligente (logueados → `/dashboard`). Secciones: Hero, Cómo funciona, Features, Pricing, CTA, Footer. Responsive, i18n-ready, SEO metadata.
+- **Archivos:** `apps/web/src/components/landing/*`, `apps/web/src/app/page.tsx`
+
 ---
 
 ## BACKEND — Features Faltantes
@@ -220,9 +225,9 @@
 ## TESTING
 
 ### 🟡 T1 — Tests de API routes
-- **Estado:** ⬜
-- **Detalle:** 0 tests para rutas de API. Agregar tests de integración para auth, reports, clients, templates, organization, chat. Usar supertest + Jest.
-- **Archivos:** Nuevo directorio `apps/api/src/__tests__/`
+- **Estado:** ✅ (2026-05-04)
+- **Detalle:** 35 tests de integración pasando para auth (15), clients (8), organization (4), reports (7), reports (1). Usa supertest + Jest + PostgreSQL real.
+- **Archivos:** `apps/api/src/__tests__/`
 
 ### 🟡 T2 — Tests del worker pipeline
 - **Estado:** ⬜
@@ -274,14 +279,14 @@
 
 | Fase | Progreso | Notas |
 |------|----------|-------|
-| FASE 1 — Presupuesto Real | ~95% | Falta i18n formal |
-| FASE 2 — Interactividad | ~90% | Chat completo, template CRUD integrado |
-| FASE 3 — UI/UX Profesional | ~90% | F1✅ F2✅ F3✅ F4✅ F5✅ F6✅ F7✅ F9✅, pendiente F8 |
-| Seguridad | ~90% | S1✅ S2✅ S3✅ S4✅ S5✅ S6✅ S7✅ S8✅ S10✅, falta S9 |
-| Testing | ~15% | 12 tests pasando, falta API/worker |
-| Arquitectura Limpia | ~75% | A1✅ A2✅ A5✅ C3✅, falta A3 A4 A6 A7 |
-| Infraestructura | ~45% | I1✅ I2✅, pendiente I3 I4 I5 |
-| Frontend | ~95% | F1✅ F2✅ F3✅ F4✅ F5✅, pendiente F6 F7 F8 F9 |
+| FASE 1 — Presupuesto Real | ~100% | i18n formal ✅ |
+| FASE 2 — Interactividad | ~95% | Chat completo, template selection en UI, edición inline ✅ |
+| FASE 3 — UI/UX Profesional | ~95% | F1✅ F2✅ F3✅ F4✅ F5✅ F6✅ F7✅ F9✅ F10✅, pendiente F8 (email) |
+| Seguridad | ~95% | S1✅ S2✅ S3✅ S4✅ S5✅ S6✅ S7✅ S8✅ S9✅ S10✅ |
+| Testing | ~40% | 46 tests pasando (API + infra), falta worker/frontend/E2E |
+| Arquitectura Limpia | ~85% | A1✅ A2✅ A3✅ A5✅ C3✅, falta A4 A6 A7 |
+| Infraestructura | ~70% | I1✅ I2✅ I4✅, pendiente I3 I5 |
+| Frontend | ~100% | F1✅ F2✅ F3✅ F4✅ F5✅ F6✅ F7✅ F8⬜ F9✅ F10✅ |
 
 ---
 

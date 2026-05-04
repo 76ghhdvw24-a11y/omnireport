@@ -15,4 +15,7 @@ module.exports = {
     '!**/node_modules/**',
     '!**/dist/**',
   ],
+  transform: {
+    '^.+\\.tsx?$': ['ts-jest', { isolatedModules: true }],
+  },
 };

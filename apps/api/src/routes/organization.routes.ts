@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
-import { S3Service, PasswordService } from '@omnireport/infrastructure';
+import { S3Service, PasswordService, logger } from '@omnireport/infrastructure';
 import multer from 'multer';
 import { PrismaOrganizationRepository } from '@omnireport/infrastructure';
 
@@ -75,7 +75,7 @@ export function createOrganizationRoutes(
         })),
       });
     } catch (error) {
-      console.error('Error getting organization:', error);
+      logger.error({ err: error }, 'Error getting organization');
       res.status(500).json({ error: 'Failed to get organization' });
     }
   });
@@ -93,9 +93,12 @@ export function createOrganizationRoutes(
 
       const org = await orgRepo.update(req.orgId, result.data);
 
-      res.json(org);
+      res.json({
+        ...org,
+        maxStorage: org.maxStorage.toString(),
+      });
     } catch (error) {
-      console.error('Error updating organization:', error);
+      logger.error({ err: error }, 'Error updating organization');
       res.status(500).json({ error: 'Failed to update organization' });
     }
   });
@@ -121,7 +124,7 @@ export function createOrganizationRoutes(
 
       res.json({ logoUrl });
     } catch (error) {
-      console.error('Error uploading logo:', error);
+      logger.error({ err: error }, 'Error uploading logo');
       res.status(500).json({ error: 'Failed to upload logo' });
     }
   });
@@ -140,7 +143,7 @@ export function createOrganizationRoutes(
 
       res.json({ items: members });
     } catch (error) {
-      console.error('Error listing members:', error);
+      logger.error({ err: error }, 'Error listing members');
       res.status(500).json({ error: 'Failed to list members' });
     }
   });
@@ -192,7 +195,7 @@ export function createOrganizationRoutes(
         temporaryPassword,
       });
     } catch (error) {
-      console.error('Error inviting member:', error);
+      logger.error({ err: error }, 'Error inviting member');
       res.status(500).json({ error: 'Failed to invite member' });
     }
   });
@@ -237,7 +240,7 @@ export function createOrganizationRoutes(
         role: updated.role,
       });
     } catch (error) {
-      console.error('Error updating role:', error);
+      logger.error({ err: error }, 'Error updating role');
       res.status(500).json({ error: 'Failed to update role' });
     }
   });
@@ -271,7 +274,7 @@ export function createOrganizationRoutes(
 
       res.json({ message: 'Member deactivated' });
     } catch (error) {
-      console.error('Error removing member:', error);
+      logger.error({ err: error }, 'Error removing member');
       res.status(500).json({ error: 'Failed to remove member' });
     }
   });

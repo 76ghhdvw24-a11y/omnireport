@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { PrismaTemplateRepository } from '@omnireport/infrastructure';
+import { logger } from '@omnireport/infrastructure';
 
 const createTemplateSchema = z.object({
   name: z.string().min(1),
@@ -39,7 +40,7 @@ export function createTemplatesRoutes(
 
       res.json({ items, total });
     } catch (error) {
-      console.error('Error listing templates:', error);
+      logger.error({ err: error }, 'Error listing templates');
       res.status(500).json({ error: 'Failed to list templates' });
     }
   });
@@ -61,7 +62,7 @@ export function createTemplatesRoutes(
 
       res.json(template);
     } catch (error) {
-      console.error('Error getting template:', error);
+      logger.error({ err: error }, 'Error getting template');
       res.status(500).json({ error: 'Failed to get template' });
     }
   });
@@ -84,7 +85,7 @@ export function createTemplatesRoutes(
 
       res.status(201).json(template);
     } catch (error) {
-      console.error('Error creating template:', error);
+      logger.error({ err: error }, 'Error creating template');
       res.status(500).json({ error: 'Failed to create template' });
     }
   });
@@ -113,7 +114,7 @@ export function createTemplatesRoutes(
 
       res.json(template);
     } catch (error) {
-      console.error('Error updating template:', error);
+      logger.error({ err: error }, 'Error updating template');
       res.status(500).json({ error: 'Failed to update template' });
     }
   });
@@ -137,7 +138,7 @@ export function createTemplatesRoutes(
 
       res.json({ message: 'Template deleted' });
     } catch (error) {
-      console.error('Error deleting template:', error);
+      logger.error({ err: error }, 'Error deleting template');
       res.status(500).json({ error: 'Failed to delete template' });
     }
   });

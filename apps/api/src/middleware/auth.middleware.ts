@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { JWTService } from '@omnireport/infrastructure';
+import { JWTService, TokenBlacklistService, logger } from '@omnireport/infrastructure';
 
 declare global {
   namespace Express {
@@ -12,7 +12,7 @@ declare global {
   }
 }
 
-export function createAuthMiddleware(jwtService: JWTService) {
+export function createAuthMiddleware(jwtService: JWTService, tokenBlacklist?: TokenBlacklistService) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
       let token: string | undefined;
@@ -31,6 +31,13 @@ export function createAuthMiddleware(jwtService: JWTService) {
         return res.status(401).json({ error: 'Unauthorized - no token' });
       }
 
+      if (tokenBlacklist) {
+        const isRevoked = await tokenBlacklist.isRevoked(token);
+        if (isRevoked) {
+          return res.status(401).json({ error: 'Token has been revoked' });
+        }
+      }
+
       let payload;
       try {
         payload = jwtService.verifyAccessToken(token);
@@ -45,7 +52,7 @@ export function createAuthMiddleware(jwtService: JWTService) {
 
       next();
     } catch (error) {
-      console.error('Auth middleware error:', error);
+      logger.error({ err: error }, 'Auth middleware error');
       return res.status(401).json({ error: 'Authentication failed' });
     }
   };

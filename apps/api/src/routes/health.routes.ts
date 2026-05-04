@@ -1,3 +1,4 @@
+import { logger } from '@omnireport/infrastructure';
 import { Router } from 'express';
 
 export function createHealthRoutes(): Router {

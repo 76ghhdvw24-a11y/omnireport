@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { z } from 'zod';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
-import { QueueService, S3Service, PDFGeneratorService } from '@omnireport/infrastructure';
+import { QueueService, S3Service, PDFGeneratorService, logger } from '@omnireport/infrastructure';
 import { ProcessMediaUseCase } from '@omnireport/use-cases';
 import { PrismaReportRepository } from '@omnireport/infrastructure';
 import { createUploadMiddleware, validateFileContent } from '../middleware/file-validator';
@@ -110,7 +110,7 @@ export function createReportsRoutes(
 
       res.status(201).json(report);
     } catch (error) {
-      console.error('Error creating report:', error);
+      logger.error({ err: error }, 'Error creating report');
       res.status(500).json({ error: 'Failed to create report' });
     }
   });
@@ -171,7 +171,7 @@ export function createReportsRoutes(
         severityDistribution,
       });
     } catch (error) {
-      console.error('Error getting report stats:', error);
+      logger.error({ err: error }, 'Error getting report stats');
       res.status(500).json({ error: 'Failed to get report stats' });
     }
   });
@@ -193,7 +193,7 @@ export function createReportsRoutes(
 
       res.json({ items, total, skip, take });
     } catch (error) {
-      console.error('Error listing reports:', error);
+      logger.error({ err: error }, 'Error listing reports');
       res.status(500).json({ error: 'Failed to list reports' });
     }
   });
@@ -251,7 +251,7 @@ export function createReportsRoutes(
         } : null,
       });
     } catch (error) {
-      console.error('Error getting report:', error);
+      logger.error({ err: error }, 'Error getting report');
       res.status(500).json({ error: 'Failed to get report' });
     }
   });
@@ -279,7 +279,7 @@ export function createReportsRoutes(
 
       res.json(result);
     } catch (error) {
-      console.error('Error generating upload URL:', error);
+      logger.error({ err: error }, 'Error generating upload URL');
       res.status(500).json({ error: 'Failed to generate upload URL' });
     }
   });
@@ -345,7 +345,7 @@ export function createReportsRoutes(
 
       res.json({ imageUrls, audioUrl });
     } catch (error: any) {
-      console.error('Error uploading files:', error);
+      logger.error({ err: error }, 'Error uploading files');
       res.status(500).json({ error: 'Failed to upload files', detail: error?.message });
     }
   });
@@ -386,7 +386,7 @@ export function createReportsRoutes(
       const updated = await reportRepo.findById(req.params.id);
       res.json(updated);
     } catch (error) {
-      console.error('Error updating report:', error);
+      logger.error({ err: error }, 'Error updating report');
       res.status(500).json({ error: 'Failed to update report' });
     }
   });
@@ -406,7 +406,7 @@ export function createReportsRoutes(
 
       res.json({ message: 'Report generation started', reportId: req.params.id });
     } catch (error) {
-      console.error('Error generating report:', error);
+      logger.error({ err: error }, 'Error generating report');
       res.status(500).json({ error: 'Failed to generate report' });
     }
   });
@@ -454,7 +454,7 @@ export function createReportsRoutes(
       res.setHeader('Content-Disposition', `${isPreview ? 'inline' : 'attachment'}; filename="${filename}"`);
       res.send(pdfBuffer);
     } catch (error) {
-      console.error('Error generating PDF:', error);
+      logger.error({ err: error }, 'Error generating PDF');
       res.status(500).json({ error: 'Failed to generate PDF' });
     }
   });
@@ -488,7 +488,7 @@ export function createReportsRoutes(
 
       res.json({ message: 'Report deleted' });
     } catch (error) {
-      console.error('Error deleting report:', error);
+      logger.error({ err: error }, 'Error deleting report');
       res.status(500).json({ error: 'Failed to delete report' });
     }
   });
@@ -555,7 +555,7 @@ export function createReportsRoutes(
         res.end();
       });
     } catch (error) {
-      console.error('Error in SSE:', error);
+      logger.error({ err: error }, 'Error in SSE');
       res.status(500).json({ error: 'Failed to establish SSE' });
     }
   });

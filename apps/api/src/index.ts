@@ -8,7 +8,8 @@ import { PrismaClient } from '@prisma/client';
 import {
   QueueService, S3Service, JWTService, PasswordService, PDFGeneratorService,
   NvidiaService, WhisperService,
-  PrismaReportRepository, PrismaUserRepository, PrismaOrganizationRepository, PrismaClientRepository, PrismaTemplateRepository
+  PrismaReportRepository, PrismaUserRepository, PrismaOrganizationRepository, PrismaClientRepository, PrismaTemplateRepository,
+  logger, TokenBlacklistService,
 } from '@omnireport/infrastructure';
 import { ProcessMediaUseCase } from '@omnireport/use-cases';
 import { createAuthMiddleware, requireRole } from './middleware/auth.middleware';
@@ -29,10 +30,10 @@ const DEFAULT_SECRETS = ['your-secret-key', 'your-secret-key-change-in-productio
 
 if (DEFAULT_SECRETS.includes(JWT_SECRET)) {
   if (process.env.NODE_ENV === 'production') {
-    console.error('FATAL: JWT_SECRET is using a default value. Set a secure JWT_SECRET before running in production.');
+    logger.fatal('JWT_SECRET is using a default value. Set a secure JWT_SECRET before running in production.');
     process.exit(1);
   } else {
-    console.warn('WARNING: JWT_SECRET is using a default value. Set JWT_SECRET to a secure random string.');
+    logger.warn('JWT_SECRET is using a default value. Set JWT_SECRET to a secure random string.');
   }
 }
 
@@ -81,7 +82,7 @@ const reportCreationLimiter = rateLimit({
 
 app.use((req, res, next) => {
   if (req.path.includes('/upload') || req.path.includes('/audio')) {
-    console.log(`[REQ] ${req.method} ${req.path} Content-Type: ${req.headers['content-type']}`);
+    logger.debug({ method: req.method, path: req.path, contentType: req.headers['content-type'] }, 'Upload request');
   }
   next();
 });
@@ -130,10 +131,14 @@ const whisperService = new WhisperService({
   model: 'whisper-1',
 });
 
-const authMiddleware = createAuthMiddleware(jwtService);
+const tokenBlacklist = process.env.REDIS_URL
+  ? new TokenBlacklistService(process.env.REDIS_URL)
+  : undefined;
+
+const authMiddleware = createAuthMiddleware(jwtService, tokenBlacklist);
 
 app.use('/health', createHealthRoutes());
-app.use('/api/v1/auth', authLimiter, createAuthRoutes(prisma, userRepo, passwordService, jwtService));
+app.use('/api/v1/auth', authLimiter, createAuthRoutes(prisma, userRepo, orgRepo, passwordService, jwtService, tokenBlacklist));
 
 app.use('/api/v1', apiLimiter);
 
@@ -154,8 +159,9 @@ app.get('/', (req, res) => {
   });
 });
 
-app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Unhandled error:', err.message, err.stack);
+app.use((err: Error, req: express.Request, res: express.Response, _next: express.NextFunction) => {
+  const reqLogger = logger.child({ requestId: (req as any).requestId, orgId: (req as any).orgId });
+  reqLogger.error({ err: { message: err.message, stack: err.stack } }, 'Unhandled error');
 
   if (err instanceof AppError) {
     return res.status(err.statusCode).json({ error: err.message, code: err.code });
@@ -171,14 +177,17 @@ app.use((err: Error, _req: express.Request, res: express.Response, _next: expres
 });
 
 const server = app.listen(PORT, () => {
-  console.log(`OmniReport API running on port ${PORT}`);
+  logger.info(`OmniReport API running on port ${PORT}`);
 });
 
 const gracefulShutdown = async (signal: string) => {
-  console.log(`${signal} received. Shutting down gracefully...`);
+  logger.info({ signal }, 'Shutting down gracefully...');
   server.close(async () => {
     await prisma.$disconnect();
     await queueService.close();
+    if (tokenBlacklist) {
+      await tokenBlacklist.close();
+    }
     process.exit(0);
   });
 };

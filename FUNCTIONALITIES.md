@@ -98,7 +98,7 @@ Usuario → Sube fotos/audio → API → BullMQ Queue
 
 - `POST /api/v1/auth/refresh` — Renueva tokens usando refreshToken
 - Frontend: interceptor Axios que detecta 401 y refresca automáticamente
-- **Estado:** ✅ Backend funcional | ⚠️ Frontend implementado con interceptor
+- **Estado:** ✅ Backend funcional | ✅ Frontend implementado con interceptor Axios
 
 ### Middleware de Autenticación ✅
 
@@ -115,15 +115,14 @@ Usuario → Sube fotos/audio → API → BullMQ Queue
 ### Control de Acceso por Roles ⚠️
 
 - Roles definidos: `ADMIN` y `MEMBER`
-- El rol se incluye en el JWT pero **no se valida en middleware de rutas**
-- Todos los usuarios autenticados dentro de una org tienen los mismos permisos
-- ❌ RBAC granular no implementado
+- `requireRole()` implementado en `auth.middleware.ts` y aplicado en gestión de equipo
+- ⚠️ RBAC granular no aplicado en todas las rutas sensibles (templates, clients DELETE, etc.)
 
 ### Seguridad Pendiente ⚠️
 
-- ❌ **Rate limiting** — Sin protección contra abuso de API
-- ❌ **Row-Level Security** — Migración SQL existe (`02_add_row_level_security.sql`) pero no aplicada. Cualquier usuario autenticado puede ver datos de otras organizaciones vía directa a DB
-- ⚠️ **Validación de archivos** — multer limita tamaño (50MB) y tipo, pero falta validación más estricta de content-type
+- ✅ **Rate limiting** — Implementado: auth (20/15min), general (200/min), creación (10/hora)
+- ✅ **Row-Level Security** — Migración SQL aplicada. Funciones RLS conectadas en middleware de auth.
+- ✅ **Validación de archivos** — Magic bytes, whitelist de extensiones, sanitización de nombres.
 
 ### Archivos Clave
 
@@ -160,7 +159,7 @@ Usuario → Sube fotos/audio → API → BullMQ Queue
 | ENTERPRISE | Ilimitados | 100 GB | — |
 
 - Método `canCreateReport(reportCount)` en entidad `Organization` verifica límites
-- ⚠️ **No se verifica el límite de reportes antes de crear uno en la API**
+- ✅ **Verificación de límite implementada en `POST /reports`** — retorna 403 si se excede el plan
 
 ### Página Settings ✅
 
@@ -369,8 +368,8 @@ PENDING → PROCESSING → TRANSCRIBING (si hay audio) → ANALYZING → COMPLET
 
 - **Google Gemini** → `gemini-1.5-pro` / `gemini-1.5-flash`
 - Implementado en `packages/infrastructure/src/ai/gemini.service.ts`
-- `GenerateReportUseCase` usa Gemini, pero el Worker actual usa NVIDIA inline
-- ⚠️ **No se usa activamente** — el worker tiene la lógica inline usando NVIDIA
+- `GenerateReportUseCase` usa Gemini, pero el Worker actual usa NVIDIA
+- ⚠️ **No se usa activamente** — `GeminiService` y `GenerateReportUseCase` son código muerto pendiente de eliminar o conectar
 
 ### Transcripción ✅
 
@@ -391,7 +390,7 @@ PENDING → PROCESSING → TRANSCRIBING (si hay audio) → ANALYZING → COMPLET
 
 | Archivo | Rol |
 |---------|-----|
-| `apps/worker/src/index.ts` | Worker BullMQ con lógica inline |
+| `apps/worker/src/index.ts` | Worker BullMQ, usa NvidiaService/WhisperService desde infraestructura |
 | `packages/infrastructure/src/ai/nvidia.service.ts` | Servicio NVIDIA (no usado en worker por caching tsx) |
 | `packages/infrastructure/src/ai/gemini.service.ts` | Servicio Gemini (no activo actualmente) |
 | `packages/infrastructure/src/ai/whisper.service.ts` | Servicio de transcripción |
@@ -478,8 +477,8 @@ La IA puede responder con bloques especiales además de texto libre:
 
 ### Limitaciones ⚠️
 
-- ⚠️ El campo `templateId` existe en el reporte pero **no se puede seleccionar en la UI de creación**
-- ❌ No existe UI para crear/editar templates
+- ✅ El campo `templateId` se puede seleccionar en el formulario de creación (`/reports/new`)
+- ❌ No existe UI para crear/editar templates custom
 - ❌ No existe endpoint para crear templates (solo GET list)
 
 ### Archivos Clave
@@ -551,7 +550,7 @@ La IA puede responder con bloques especiales además de texto libre:
 
 | Ruta | Página | Estado |
 |------|--------|--------|
-| `/` | Redirect a dashboard o login | ✅ |
+| `/` | Landing page de marketing (logueados → `/dashboard`) | ✅ |
 | `/login` | Login email + password | ✅ |
 | `/register` | Registro con org, nombre, email, password | ✅ |
 | `/dashboard` | Lista de reportes con badges estado/severidad, filtro por status | ✅ |
@@ -597,7 +596,7 @@ Logout   → clear localStorage → user = null → Redirect /login
 - ✅ Textos de UI en español, inglés y portugués
 - ✅ Sistema `next-intl` implementado con archivos JSON por idioma
 - ✅ Cambio de idioma persistente en `localStorage`
-- ⚠️ Traducción completa en progreso (navbar, dashboard, settings, profile listos)
+- ✅ Traducción completa en navbar, dashboard, settings, profile y landing page
 
 ### Archivos Clave
 
@@ -901,7 +900,7 @@ npm run clean            # Borrar node_modules y dist
 | 1.1 | Configuración del negocio | ✅ | Campos de org (dirección, teléfono, taxId, moneda, idioma) + logo upload |
 | 1.2 | Modelo de cliente | ✅ | CRUD de clients con vinculación a reportes |
 | 1.3 | Precios y costos | ✅ | Findings con estimatedCost + quantity, subtotal/tax/total en reporte |
-| 1.4 | Multi-idioma | ⚠️ | Worker soporta es/en/pt, pero UI sin sistema i18n formal |
+| 1.4 | Multi-idioma | ✅ | `next-intl` implementado con es/en/pt en UI, landing y worker |
 
 ### FASE 2 — Interactividad
 
@@ -926,9 +925,9 @@ npm run clean            # Borrar node_modules y dist
 
 | Fase | Progreso | Notas |
 |------|-----------|-------|
-| FASE 1 | ~90% | Funcionalidades core implementadas, i18n parcial |
-| FASE 2 | ~80% | Chat IA completo, edición inline funciona, falta template UI |
-| FASE 3 | ~90% | Dashboard profesional, equipo, preview PDF, perfil, notificaciones in-app, i18n, SSE listos |
+| FASE 1 | ~95% | Funcionalidades core implementadas, i18n completo |
+| FASE 2 | ~95% | Chat IA completo, edición inline funciona, template selection en UI |
+| FASE 3 | ~95% | Dashboard profesional, equipo, preview PDF, perfil, notificaciones in-app, i18n, SSE, landing page listos |
 
 ---
 
@@ -938,17 +937,17 @@ npm run clean            # Borrar node_modules y dist
 
 | # | Problema | Impacto | Archivo |
 |---|----------|---------|---------|
-| 1 | API key NVIDIA expuesta en `.env.example` | Seguridad — debe rotarse inmediatamente | `.env.example` |
-| 2 | RLS no aplicado | Cualquier usuario puede ver datos de otras orgs vía DB directa | `prisma/migrations/` |
-| 3 | tsx watch cachea módulos | Cambios en `packages/` no se reflejan sin restart | Worker usa lógica inline como workaround |
+| 1 | API key NVIDIA expuesta en `.env.example` | ✅ Resuelto: placeholders agregados, rotar keys en servicios | `.env.example` |
+| 2 | RLS no aplicado | ✅ Resuelto: migración ejecutada y conectada en middleware | `prisma/migrations/` |
+| 3 | tsx watch cachea módulos | ✅ Resuelto: worker refactorizado para usar servicios de infraestructura | `apps/worker/src/index.ts` |
 
 ### Funcionales ⚠️
 
 | # | Problema | Impacto |
 |---|----------|---------|
-| 4 | Sin selector de template en UI | ✅ Resuelto: selector funciona en `/reports/new` |
-| 5 | Worker usa NVIDIA inline | `NvidiaService` en infra no se usa por bug de tsx watch |
-| 6 | `GenerateReportUseCase` (Gemini) no se usa | El worker tiene lógica duplicada inline con NVIDIA |
+| 4 | Sin selector de template en UI | ✅ Resuelto: selector funciona en `/reports/new` y `/reports/new/chat` |
+| 5 | Worker usa NVIDIA inline | ✅ Resuelto: worker usa `NvidiaService` desde infraestructura |
+| 6 | `GenerateReportUseCase` (Gemini) no se usa | Código muerto pendiente de eliminar o conectar |
 
 ### UX ⚠️
 
@@ -956,7 +955,7 @@ npm run clean            # Borrar node_modules y dist
 |---|----------|---------|
 | 7 | Dashboard básico | ✅ Resuelto: KPIs, búsqueda, filtros, ordenamiento, paginación |
 | 8 | Sin vista previa PDF | ✅ Resuelto: Modal con iframe (?preview=true) |
-| 9 | Polling cada 3s | ⚠️ Notificaciones toast agregadas. Ideal: WebSocket/SSE |
+| 9 | Polling cada 3s | ✅ Resuelto: reemplazado por SSE (`/reports/:id/events`) |
 | 10 | UI sin i18n formal | ✅ Resuelto: next-intl con es/en/pt implementado |
 
 ### Seguridad ⚠️
@@ -965,4 +964,4 @@ npm run clean            # Borrar node_modules y dist
 |---|----------|---------|
 | 11 | Sin rate limiting | ✅ Resuelto: por IP, auth, general y creación de reportes |
 | 12 | Validación de archivos básica | ✅ Resuelto: magic bytes, whitelist extensiones, sanitización |
-| 13 | RBAC no implementado | ⚠️ `requireRole()` existe y se usa en gestión de equipo. Falta en más rutas |
+| 13 | RBAC no implementado | ⚠️ `requireRole()` existe y se usa en gestión de equipo. Falta aplicar en más rutas sensibles |

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { PrismaClientRepository } from '@omnireport/infrastructure';
+import { logger } from '@omnireport/infrastructure';
 
 const createClientSchema = z.object({
   name: z.string().min(1),
@@ -31,7 +32,7 @@ export function createClientsRoutes(clientRepo: PrismaClientRepository): Router 
 
       res.json({ items: clients });
     } catch (error) {
-      console.error('Error listing clients:', error);
+      logger.error({ err: error }, 'Error listing clients');
       res.status(500).json({ error: 'Failed to list clients' });
     }
   });
@@ -51,7 +52,7 @@ export function createClientsRoutes(clientRepo: PrismaClientRepository): Router 
 
       res.status(201).json(client);
     } catch (error) {
-      console.error('Error creating client:', error);
+      logger.error({ err: error }, 'Error creating client');
       res.status(500).json({ error: 'Failed to create client' });
     }
   });
@@ -76,7 +77,7 @@ export function createClientsRoutes(clientRepo: PrismaClientRepository): Router 
 
       res.json(client);
     } catch (error) {
-      console.error('Error updating client:', error);
+      logger.error({ err: error }, 'Error updating client');
       res.status(500).json({ error: 'Failed to update client' });
     }
   });
@@ -96,7 +97,7 @@ export function createClientsRoutes(clientRepo: PrismaClientRepository): Router 
 
       res.json({ message: 'Client deleted' });
     } catch (error) {
-      console.error('Error deleting client:', error);
+      logger.error({ err: error }, 'Error deleting client');
       res.status(500).json({ error: 'Failed to delete client' });
     }
   });

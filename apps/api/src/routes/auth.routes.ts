@@ -1,8 +1,8 @@
 import { Router } from 'express';
 import { z } from 'zod';
 import { PrismaClient } from '@prisma/client';
-import { PasswordService, JWTService } from '@omnireport/infrastructure';
-import { PrismaUserRepository } from '@omnireport/infrastructure';
+import { PasswordService, JWTService, TokenBlacklistService, logger } from '@omnireport/infrastructure';
+import { PrismaUserRepository, PrismaOrganizationRepository } from '@omnireport/infrastructure';
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -31,8 +31,10 @@ const changePasswordSchema = z.object({
 export function createAuthRoutes(
   prisma: PrismaClient,
   userRepo: PrismaUserRepository,
+  orgRepo: PrismaOrganizationRepository,
   passwordService: PasswordService,
-  jwtService: JWTService
+  jwtService: JWTService,
+  tokenBlacklist?: TokenBlacklistService
 ): Router {
   const router = Router();
 
@@ -56,19 +58,16 @@ export function createAuthRoutes(
         .replace(/[^a-z0-9-]/g, '')
         .substring(0, 50);
 
-      const existingOrg = await prisma.organization.findUnique({ where: { slug } });
+      const existingOrg = await orgRepo.findBySlug(slug);
       if (existingOrg) {
         return res.status(409).json({ error: 'Organization name already taken' });
       }
 
       const passwordHash = await passwordService.hash(password);
 
-      const org = await prisma.organization.create({
-        data: {
-          name: organizationName,
-          slug,
-          isActive: true,
-        },
+      const org = await orgRepo.create({
+        name: organizationName,
+        slug,
       });
 
       const user = await userRepo.create({
@@ -92,8 +91,8 @@ export function createAuthRoutes(
         ...tokens,
       });
     } catch (error) {
-      console.error('Registration error:', error);
-      res.status(500).json({ error: 'Registration failed' });
+      logger.error({ err: error }, 'Registration error XYZ');
+      res.status(500).json({ error: 'Registration failed XYZ' });
     }
   });
 
@@ -135,7 +134,7 @@ export function createAuthRoutes(
         ...tokens,
       });
     } catch (error) {
-      console.error('Login error:', error);
+      logger.error({ err: error }, 'Login error');
       res.status(500).json({ error: 'Login failed' });
     }
   });
@@ -209,10 +208,7 @@ export function createAuthRoutes(
         return res.status(400).json({ error: 'No valid fields to update' });
       }
 
-      const updatedUser = await prisma.user.update({
-        where: { id: user.id },
-        data: updateData,
-      });
+      const updatedUser = await userRepo.update(user.id, updateData);
 
       res.json({
         user: {
@@ -225,7 +221,7 @@ export function createAuthRoutes(
         },
       });
     } catch (error) {
-      console.error('Update profile error:', error);
+      logger.error({ err: error }, 'Update profile error');
       res.status(500).json({ error: 'Failed to update profile' });
     }
   });
@@ -235,6 +231,13 @@ export function createAuthRoutes(
       const { refreshToken } = req.body;
       if (!refreshToken) {
         return res.status(400).json({ error: 'Refresh token is required' });
+      }
+
+      if (tokenBlacklist) {
+        const isRevoked = await tokenBlacklist.isRevoked(refreshToken);
+        if (isRevoked) {
+          return res.status(401).json({ error: 'Refresh token has been revoked' });
+        }
       }
 
       const decoded = jwtService.verifyRefreshToken(refreshToken);
@@ -256,8 +259,39 @@ export function createAuthRoutes(
 
       res.json(tokens);
     } catch (error) {
-      console.error('Refresh error:', error);
+      logger.error({ err: error }, 'Refresh error');
       res.status(401).json({ error: 'Invalid refresh token' });
+    }
+  });
+
+  router.post('/logout', async (req, res) => {
+    try {
+      const authHeader = req.headers.authorization;
+      const refreshToken = req.body.refreshToken;
+
+      if (!tokenBlacklist) {
+        return res.status(501).json({ error: 'Token revocation not configured' });
+      }
+
+      // Revoke access token if present
+      if (authHeader?.startsWith('Bearer ')) {
+        const accessToken = authHeader.substring(7);
+        const decoded = jwtService.verifyAccessToken(accessToken) as any;
+        const ttl = decoded.exp ? decoded.exp - Math.floor(Date.now() / 1000) : 900;
+        await tokenBlacklist.revoke(accessToken, ttl);
+      }
+
+      // Revoke refresh token if present
+      if (refreshToken) {
+        const decoded = jwtService.verifyRefreshToken(refreshToken) as any;
+        const ttl = decoded.exp ? decoded.exp - Math.floor(Date.now() / 1000) : 604800;
+        await tokenBlacklist.revoke(refreshToken, ttl);
+      }
+
+      res.json({ message: 'Logged out successfully' });
+    } catch (error) {
+      logger.error({ err: error }, 'Logout error');
+      res.status(500).json({ error: 'Logout failed' });
     }
   });
 
