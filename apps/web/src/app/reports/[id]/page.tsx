@@ -1,13 +1,13 @@
 'use client';
 
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { api } from '@/lib/api';
+import { api, uploadFiles } from '@/lib/api';
 import { formatCurrency, formatNumberInput, getCurrencySymbol } from '@/lib/formatCurrency';
 import {
   Loader2, AlertTriangle, CheckCircle, Clock, XCircle, Download,
   Pencil, CheckCircle2, MessageSquare, X, Send, Mic,
-  Plus, Trash2, Check, XIcon, Image as ImageIcon,
+  Plus, Trash2, Check, XIcon, Image as ImageIcon, Sparkles, MicOff, Film,
 } from 'lucide-react';
 import { NavBar } from '@/components/navbar';
 import { toast } from 'sonner';
@@ -16,6 +16,7 @@ interface Finding { description: string; severity: string; confidence: number; c
 interface ClientInfo { id: string; name: string; email?: string | null; phone?: string | null; address?: string | null; taxId?: string | null }
 interface OrgInfo { name: string; logoUrl?: string | null; address?: string | null; phone?: string | null; taxId?: string | null; currency?: string; language?: string }
 interface ChatMsg { id: string; reportId: string; role: string; content: string; createdAt: string }
+interface Suggestion { field: string; value: unknown; reason: string }
 interface Report {
   id: string; title: string; description: string | null; status: string; severity: string | null;
   audioTranscript: string | null; findings: Finding[] | null; executiveSummary: string | null;
@@ -27,9 +28,9 @@ interface Report {
 }
 
 const statusLabels: Record<string, string> = { PENDING: 'Pendiente', PROCESSING: 'Procesando', TRANSCRIBING: 'Transcribiendo', ANALYZING: 'Analizando', COMPLETED: 'Completado', DRAFT: 'Borrador', APPROVED: 'Aprobado', FAILED: 'Fallido' };
+const severityColors: Record<string, string> = { CRITICAL: 'bg-red-100 text-red-700', HIGH: 'bg-orange-100 text-orange-700', MEDIUM: 'bg-yellow-100 text-yellow-700', LOW: 'bg-blue-100 text-blue-700', INFO: 'bg-gray-100 text-gray-700' };
 const severityLabels: Record<string, string> = { CRITICAL: 'Crítico', HIGH: 'Alto', MEDIUM: 'Medio', LOW: 'Bajo', INFO: 'Informativo' };
 const severityOptions = ['CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'INFO'];
-const severityColors: Record<string, string> = { CRITICAL: 'bg-red-100 text-red-700', HIGH: 'bg-orange-100 text-orange-700', MEDIUM: 'bg-yellow-100 text-yellow-700', LOW: 'bg-blue-100 text-blue-700', INFO: 'bg-gray-100 text-gray-700' };
 
 function EditableField({ value, onSave, type = 'text', placeholder = '', className = '' }: { value: string | number; onSave: (v: string) => Promise<void>; type?: string; placeholder?: string; className?: string }) {
   const [editing, setEditing] = useState(false);
@@ -57,8 +58,15 @@ export default function ReportDetailPage() {
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState('');
   const [chatSending, setChatSending] = useState(false);
+  const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
+  const [isRecording, setIsRecording] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
+  const audioInputRef = useRef<HTMLInputElement>(null);
+  const chatImageInputRef = useRef<HTMLInputElement>(null);
+  const chatVideoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => { if (id) fetchReport(); }, [id]);
   useEffect(() => {
@@ -73,13 +81,80 @@ export default function ReportDetailPage() {
   const fetchReport = async () => { try { const res = await api.get(`/api/v1/reports/${id}`); setReport(res.data); } catch (err: any) { setError(err.response?.data?.error || 'Error al cargar'); } finally { setIsLoading(false); } };
   const fetchChat = async () => { try { const res = await api.get(`/api/v1/reports/${id}/chat`); setChatMessages(res.data.items); } catch {} };
 
-  const sendChat = async () => {
-    if (!chatInput.trim() || chatSending) return;
-    setChatSending(true); const msg = chatInput.trim(); setChatInput('');
+  const sendChat = async (message?: string) => {
+    const msg = (message || chatInput).trim();
+    if (!msg || chatSending) return;
+    setChatSending(true); setChatInput('');
     setChatMessages(p => [...p, { id: `t-${Date.now()}`, reportId: id, role: 'user', content: msg, createdAt: new Date().toISOString() }]);
-    try { const res = await api.post(`/api/v1/reports/${id}/chat`, { message: msg }); setChatMessages(p => [...p, res.data.message]); if (res.data.modifications) fetchReport(); }
-    catch { toast.error('Error al enviar mensaje'); } finally { setChatSending(false); }
+    try {
+      const res = await api.post(`/api/v1/reports/${id}/chat`, { message: msg });
+      setChatMessages(p => [...p, res.data.message]);
+      if (res.data.suggestions && res.data.suggestions.length > 0) setSuggestions(prev => [...prev, ...res.data.suggestions]);
+      if (res.data.modifications || res.data.suggestions) fetchReport();
+    } catch { toast.error('Error al enviar mensaje'); } finally { setChatSending(false); }
   };
+
+  const sendAudio = async (audioBlob: Blob) => {
+    setChatSending(true);
+    setChatMessages(p => [...p, { id: `v-${Date.now()}`, reportId: id, role: 'user', content: '🎤 Enviando nota de voz...', createdAt: new Date().toISOString() }]);
+    try {
+      const fd = new FormData();
+      const file = new File([audioBlob], `audio-${Date.now()}.webm`, { type: audioBlob.type || 'audio/webm' });
+      fd.append('audio', file);
+      const res = await uploadFiles<{ transcription?: string; message: any; suggestions?: any[]; modifications?: any }>(`/api/v1/reports/${id}/chat/audio`, fd);
+      setChatMessages(prev => {
+        const updated = [...prev];
+        const lastMsg = updated[updated.length - 1];
+        if (lastMsg && lastMsg.content.startsWith('🎤')) {
+          updated[updated.length - 1] = { ...lastMsg, content: `🎤 ${res.data.transcription || 'Audio procesado'}` };
+        }
+        return updated;
+      });
+      setChatMessages(p => [...p, res.data.message]);
+      if (res.data.suggestions) setSuggestions(prev => [...prev, ...(res.data.suggestions as any[])]);
+      if (res.data.modifications || res.data.suggestions) fetchReport();
+    } catch { toast.error('Error al procesar audio'); } finally { setChatSending(false); }
+  };
+
+  const uploadAudioToChat = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const f = e.target.files?.[0]; if (!f) return;
+    const fileCopy = new File([f], f.name, { type: f.type });
+    e.target.value = '';
+    await sendAudio(fileCopy);
+  };
+
+  const toggleRecording = useCallback(async () => {
+    if (isRecording) {
+      mediaRecorderRef.current?.stop();
+      setIsRecording(false);
+    } else {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' });
+        const chunks: BlobPart[] = [];
+        recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
+        recorder.onstop = () => {
+          stream.getTracks().forEach(t => t.stop());
+          const blob = new Blob(chunks, { type: 'audio/webm' });
+          sendAudio(blob);
+        };
+        recorder.start();
+        mediaRecorderRef.current = recorder;
+        setIsRecording(true);
+      } catch { toast.error('No se pudo acceder al micrófono'); }
+    }
+  }, [isRecording]);
+
+  const applySuggestion = async (suggestion: Suggestion) => {
+    try {
+      await api.patch(`/api/v1/reports/${id}`, { [suggestion.field]: suggestion.value });
+      setSuggestions(prev => prev.filter(s => s !== suggestion));
+      toast.success('Sugerencia aplicada');
+      fetchReport();
+    } catch { toast.error('Error al aplicar sugerencia'); }
+  };
+
+  const dismissSuggestion = (suggestion: Suggestion) => { setSuggestions(prev => prev.filter(s => s !== suggestion)); };
 
   const patch = async (data: Record<string, unknown>) => { await api.patch(`/api/v1/reports/${id}`, data); fetchReport(); };
 
@@ -91,30 +166,40 @@ export default function ReportDetailPage() {
   const removeFinding = async (idx: number) => { if (!report?.findings) return; const updated = report.findings.filter((_, i) => i !== idx); await patch({ findings: updated }); toast.success('Item eliminado'); };
 
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files; if (!files || files.length === 0) return;
+    const files = Array.from(e.target.files || []); if (files.length === 0) return;
     e.target.value = '';
     try {
       const fd = new FormData();
-      for (let i = 0; i < files.length; i++) fd.append('files', files[i]);
-      await api.post(`/api/v1/reports/${id}/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
+      for (const f of files) fd.append('files', f);
+      await uploadFiles(`/api/v1/reports/${id}/upload`, fd);
       toast.success('Imágenes subidas');
       fetchReport();
-    } catch { toast.error('Error al subir imágenes'); }
+    } catch (err: any) { console.error('[UPLOAD ERROR]', err?.response?.data || err); toast.error('Error al subir imágenes'); }
   };
 
-  const handleVoiceUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const f = e.target.files?.[0]; if (!f) return; e.target.value = '';
-    if (!f.type.startsWith('audio/')) { toast.error('Solo archivos de audio'); return; }
-    setChatMessages(p => [...p, { id: `v-${Date.now()}`, reportId: id, role: 'user', content: `🎤 Nota de voz: ${f.name}`, createdAt: new Date().toISOString() }]);
-    setChatSending(true);
+  const handleChatFileUpload = async (files: File[], typeLabel: string) => {
+    if (!report) return;
+    setUploading(true);
+    const names = files.map(f => f.name);
+    setChatMessages(p => [...p, { id: `f-${Date.now()}`, reportId: id, role: 'user', content: `📎 Subiendo ${typeLabel}: ${names.join(', ')}`, createdAt: new Date().toISOString() }]);
     try {
-      const fd = new FormData(); fd.append('files', f);
-      await api.post(`/api/v1/reports/${id}/upload`, fd, { headers: { 'Content-Type': 'multipart/form-data' } });
-      await api.post(`/api/v1/reports/${id}/generate`);
-      toast.success('Audio recibido. Re-analizando presupuesto...');
+      const fd = new FormData();
+      for (const f of files) fd.append('files', f);
+      await uploadFiles(`/api/v1/reports/${id}/upload`, fd);
+      setChatMessages(p => {
+        const updated = [...p];
+        const lastMsg = updated[updated.length - 1];
+        if (lastMsg && lastMsg.content.startsWith('📎 Subiendo')) {
+          updated[updated.length - 1] = { ...lastMsg, content: `📎 ${typeLabel} subido correctamente` };
+        }
+        return updated;
+      });
+      toast.success('Archivos subidos');
       fetchReport();
-    } catch { toast.error('Error al subir audio'); }
-    finally { setChatSending(false); }
+      await api.post(`/api/v1/reports/${id}/generate`);
+      toast.success('Re-análisis iniciado');
+    } catch (err: any) { console.error('[UPLOAD ERROR]', err?.response?.data || err); toast.error('Error al subir archivos'); }
+    finally { setUploading(false); }
   };
 
   const recalcTotals = (findings: Finding[], taxRate: number | null) => {
@@ -158,7 +243,7 @@ export default function ReportDetailPage() {
               <button onClick={downloadPDF} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50"><Download className="w-4 h-4" />PDF</button>
             )}
             {canEdit && (
-              <button onClick={() => setChatOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md text-sm font-medium hover:bg-purple-700"><MessageSquare className="w-4 h-4" />Consultar IA</button>
+              <button onClick={() => setChatOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md text-sm font-medium hover:bg-purple-700"><MessageSquare className="w-4 h-4" />IA</button>
             )}
             {report.status === 'COMPLETED' && canEdit && (
               <button onClick={() => changeStatus('DRAFT')} className="flex items-center gap-2 px-4 py-2 border border-amber-300 text-amber-700 rounded-md text-sm font-medium hover:bg-amber-50"><Pencil className="w-4 h-4" />Editar</button>
@@ -168,6 +253,22 @@ export default function ReportDetailPage() {
             )}
           </div>
         </div>
+
+        {/* === SUGGESTIONS === */}
+        {suggestions.length > 0 && (
+          <div className="mb-4 space-y-2 print:hidden">
+            {suggestions.map((s, i) => (
+              <div key={i} className="flex items-center gap-3 bg-amber-50 border border-amber-200 rounded-lg px-4 py-3">
+                <Sparkles className="w-4 h-4 text-amber-500 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm text-amber-900">{s.reason || `Sugerencia: ${s.field}`}</p>
+                </div>
+                <button onClick={() => applySuggestion(s)} className="px-3 py-1 bg-amber-600 text-white rounded text-xs font-medium hover:bg-amber-700">Aplicar</button>
+                <button onClick={() => dismissSuggestion(s)} className="text-amber-400 hover:text-amber-600"><XIcon className="w-4 h-4" /></button>
+              </div>
+            ))}
+          </div>
+        )}
 
         {/* === PRESUPUESTO DOCUMENT === */}
         <div className="bg-white rounded-lg shadow-lg print:shadow-none print:rounded-none overflow-hidden">
@@ -312,9 +413,7 @@ export default function ReportDetailPage() {
                 <div className="flex justify-between text-sm items-center">
                   <span className="text-gray-500">
                     IVA{canEdit ? (
-                      <span className="ml-1">
-                        (<EditableField value={taxRate} onSave={(v) => patch({ taxRate: parseFloat(v) || 0 })} type="number" className="w-8 text-center" />%)
-                      </span>
+                      <span className="ml-1">(<EditableField value={taxRate} onSave={(v) => patch({ taxRate: parseFloat(v) || 0 })} type="number" className="w-8 text-center" />%)</span>
                     ) : ` (${taxRate}%)`}:
                   </span>
                   {canEdit ? (
@@ -379,10 +478,6 @@ export default function ReportDetailPage() {
                   <ImageIcon className="w-3.5 h-3.5" />Agregar fotos
                   <input ref={imageInputRef} type="file" accept="image/*" multiple onChange={handleImageUpload} className="hidden" />
                 </label>
-                <label className="inline-flex items-center gap-2 px-3 py-2 bg-purple-50 text-purple-700 border border-purple-200 rounded-md cursor-pointer hover:bg-purple-100 text-xs font-medium">
-                  <Mic className="w-3.5 h-3.5" />Agregar audio
-                  <input type="file" accept="audio/*" onChange={handleVoiceUpload} className="hidden" />
-                </label>
               </div>
             </div>
           )}
@@ -406,15 +501,20 @@ export default function ReportDetailPage() {
               </div>
               <button onClick={() => setChatOpen(false)} className="text-gray-400 hover:text-gray-600"><X className="w-5 h-5" /></button>
             </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
               {chatMessages.length === 0 && (
                 <div className="text-center text-gray-400 mt-8">
                   <MessageSquare className="w-8 h-8 mx-auto mb-2" />
                   <p className="text-sm font-medium text-gray-600 mb-2">¿Qué querés modificar?</p>
                   <div className="text-xs space-y-1 text-gray-400">
                     <p>&quot;Cambia el precio del item 1 a $150.000&quot;</p>
-                    <p>&quot;Reescribe el resumen en términos más simples&quot;</p>
                     <p>&quot;Agrega un item sobre corrosión en la carrocería&quot;</p>
+                    <p>&quot;Reescribe el resumen en términos más simples&quot;</p>
+                  </div>
+                  <div className="mt-4">
+                    <button onClick={() => sendChat('Sugiere mejoras para este presupuesto')} disabled={chatSending} className="px-4 py-2 bg-amber-50 text-amber-700 border border-amber-200 rounded-lg text-sm font-medium hover:bg-amber-100 disabled:opacity-50">
+                      <Sparkles className="w-4 h-4 inline mr-1" />Sugerir mejoras
+                    </button>
                   </div>
                 </div>
               )}
@@ -424,14 +524,36 @@ export default function ReportDetailPage() {
                 </div>
               ))}
               {chatSending && <div className="flex justify-start"><div className="bg-gray-100 rounded-lg px-3 py-2"><Loader2 className="w-4 h-4 animate-spin text-gray-500" /></div></div>}
+              {uploading && <div className="flex justify-start"><div className="bg-gray-100 rounded-lg px-3 py-2"><Loader2 className="w-4 h-4 animate-spin text-gray-500 mr-2" /><span className="text-sm text-gray-600">Subiendo archivos...</span></div></div>}
               <div ref={chatEndRef} />
             </div>
-            <div className="border-t p-4 space-y-2">
+            <div className="border-t p-3 space-y-2">
               <div className="flex gap-2">
-                <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }}} placeholder="Escribe una instrucción..." className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" disabled={chatSending} />
-                <button onClick={sendChat} disabled={chatSending || !chatInput.trim()} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"><Send className="w-4 h-4" /></button>
+                <button onClick={toggleRecording} disabled={chatSending || uploading} className={`px-3 py-2 rounded-md border text-sm font-medium transition-colors ${isRecording ? 'bg-red-500 text-white border-red-500 animate-pulse' : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 disabled:opacity-50'}`}>
+                  {isRecording ? <><MicOff className="w-4 h-4" />Detener</> : <><Mic className="w-4 h-4" />Grabar</>}
+                </button>
+                <label className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium cursor-pointer flex items-center gap-1 disabled:opacity-50">
+                  <ImageIcon className="w-4 h-4" />Foto
+                  <input ref={chatImageInputRef} type="file" accept="image/*" multiple onChange={(e) => { const files = Array.from(e.target.files || []); if (files.length > 0) { handleChatFileUpload(files, `${files.length} imagen${files.length > 1 ? 'es' : ''}`); } e.target.value = ''; }} className="hidden" disabled={chatSending || uploading} />
+                </label>
+                <label className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium cursor-pointer flex items-center gap-1 disabled:opacity-50">
+                  <Film className="w-4 h-4" />Video
+                  <input ref={chatVideoInputRef} type="file" accept="video/*" multiple onChange={(e) => { const files = Array.from(e.target.files || []); if (files.length > 0) { handleChatFileUpload(files, `${files.length} video${files.length > 1 ? 's' : ''}`); } e.target.value = ''; }} className="hidden" disabled={chatSending || uploading} />
+                </label>
+                <label className="px-3 py-2 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50 text-sm font-medium cursor-pointer flex items-center gap-1 disabled:opacity-50">
+                  <Mic className="w-4 h-4" />Audio
+                  <input ref={audioInputRef} type="file" accept="audio/*" onChange={uploadAudioToChat} className="hidden" disabled={chatSending || uploading} />
+                </label>
               </div>
-              <p className="text-xs text-gray-400 text-center">Podés pedir cambios como &quot;cambia el precio a $50.000&quot; o &quot;reescribe el resumen&quot;</p>
+              <div className="flex gap-2">
+                <input type="text" value={chatInput} onChange={(e) => setChatInput(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }}} placeholder="Escribe una instrucción..." className="flex-1 px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm" disabled={chatSending || uploading} />
+                <button onClick={() => sendChat()} disabled={chatSending || uploading || !chatInput.trim()} className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:opacity-50"><Send className="w-4 h-4" /></button>
+              </div>
+              <div className="flex gap-2 justify-center">
+                <button onClick={() => sendChat('Sugiere mejoras para este presupuesto')} disabled={chatSending || uploading} className="px-3 py-1.5 bg-amber-50 text-amber-700 border border-amber-200 rounded-md text-xs font-medium hover:bg-amber-100 disabled:opacity-50">
+                  <Sparkles className="w-3 h-3 inline mr-1" />Sugerir mejoras
+                </button>
+              </div>
             </div>
           </div>
         </div>

@@ -24,7 +24,13 @@ app.use(cors({
   credentials: true,
 }));
 app.use(morgan('combined'));
-app.use(express.json());
+app.use(express.json({ type: 'application/json' }));
+app.use((req, res, next) => {
+  if (req.path.includes('/upload') || req.path.includes('/audio')) {
+    console.log(`[REQ] ${req.method} ${req.path} Content-Type: ${req.headers['content-type']}`);
+  }
+  next();
+});
 
 const prisma = new PrismaClient();
 
@@ -57,13 +63,14 @@ const authMiddleware = createAuthMiddleware(jwtService);
 app.use('/health', createHealthRoutes());
 app.use('/api/v1/auth', createAuthRoutes(prisma, passwordService, jwtService));
 
+app.use('/api/v1/reports', authMiddleware, createChatRoutes(prisma, s3Service));
+
 const reportsRouter = createReportsRoutes(prisma, processMediaUseCase, queueService, s3Service, pdfService);
 app.use('/api/v1/reports', authMiddleware, reportsRouter);
 
 app.use('/api/v1/organization', authMiddleware, createOrganizationRoutes(prisma, s3Service));
 app.use('/api/v1/clients', authMiddleware, createClientsRoutes(prisma));
 app.use('/api/v1/templates', authMiddleware, createTemplatesRoutes(prisma));
-app.use('/api/v1/reports', authMiddleware, createChatRoutes(prisma));
 
 app.get('/', (req, res) => {
   res.json({
@@ -74,7 +81,13 @@ app.get('/', (req, res) => {
 });
 
 app.use((err: Error, _req: express.Request, res: express.Response, _next: express.NextFunction) => {
-  console.error('Unhandled error:', err);
+  console.error('Unhandled error:', err.message, err.stack);
+  if ((err as any).code === 'LIMIT_FILE_SIZE' || (err as any).code === 'LIMIT_FILE_COUNT' || (err as any).code === 'LIMIT_UNEXPECTED_FILE') {
+    return res.status(400).json({ error: err.message, code: (err as any).code });
+  }
+  if (err.message && err.message.includes('multipart')) {
+    return res.status(400).json({ error: err.message });
+  }
   res.status(500).json({ error: 'Internal server error' });
 });
 

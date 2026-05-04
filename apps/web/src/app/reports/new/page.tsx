@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useDropzone } from 'react-dropzone';
-import { api } from '@/lib/api';
+import { api, uploadFiles } from '@/lib/api';
 import { Upload, X, Loader2, Mic, Image as ImageIcon, FileText, Type } from 'lucide-react';
 import { NavBar } from '@/components/navbar';
 import { toast } from 'sonner';
@@ -67,7 +67,7 @@ export default function NewReportPage() {
         setUploadProgress('Subiendo archivos...');
         const formData = new FormData();
         for (const file of allFiles) formData.append('files', file);
-        await api.post(`/api/v1/reports/${reportId}/upload`, formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+        await uploadFiles(`/api/v1/reports/${reportId}/upload`, formData);
         setUploadProgress('Iniciando análisis...');
         await api.post(`/api/v1/reports/${reportId}/generate`);
       }

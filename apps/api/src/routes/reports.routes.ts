@@ -7,7 +7,17 @@ import { ProcessMediaUseCase } from '@omnireport/use-cases';
 import { PrismaReportRepository } from '@omnireport/infrastructure';
 import multer from 'multer';
 
-const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 50 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith('image/') || file.mimetype.startsWith('audio/')) {
+      cb(null, true);
+    } else {
+      cb(new Error(`Unsupported file type: ${file.mimetype}. Only images and audio are allowed.`));
+    }
+  },
+});
 
 const createReportSchema = z.object({
   title: z.string().min(1),
@@ -185,7 +195,13 @@ export function createReportsRoutes(
     }
   });
 
-  router.post('/:id/upload', upload.array('files', 10), async (req, res) => {
+  router.post('/:id/upload', (req, res, next) => {
+    console.log('[UPLOAD-ROUTE] Method:', req.method, 'Path:', req.path, 'Content-Type:', req.headers['content-type'], 'Content-Length:', req.headers['content-length']);
+    next();
+  }, upload.array('files', 10), async (req, res) => {
+    console.log('[UPLOAD] Content-Type:', req.headers['content-type']);
+    console.log('[UPLOAD] req.files:', req.files ? (req.files as Express.Multer.File[]).map(f => ({ fieldname: f.fieldname, originalname: f.originalname, size: f.size, mimetype: f.mimetype })) : 'null');
+    console.log('[UPLOAD] req.body keys:', Object.keys(req.body));
     try {
       if (!req.orgId) {
         return res.status(401).json({ error: 'Unauthorized' });
@@ -199,6 +215,13 @@ export function createReportsRoutes(
       const files = req.files as Express.Multer.File[];
       if (!files || files.length === 0) {
         return res.status(400).json({ error: 'No files uploaded' });
+      }
+      const videoFiles = files.filter(f => f.mimetype.startsWith('video/'));
+      if (videoFiles.length > 0) {
+        return res.status(400).json({
+          error: 'Video files are not supported. Please upload images or audio files only.',
+          unsupportedFiles: videoFiles.map(f => f.originalname),
+        });
       }
       const imageUrls: string[] = report.imageUrls ? [...report.imageUrls] : [];
       let audioUrl: string | null = report.audioUrl;
@@ -215,7 +238,7 @@ export function createReportsRoutes(
       for (const file of files) {
         const isImage = file.mimetype.startsWith('image/');
         const isAudio = file.mimetype.startsWith('audio/');
-        const type = isImage ? 'image' : isAudio ? 'audio' : 'image';
+        const type: 'image' | 'audio' = isImage ? 'image' : 'audio';
         const extension = file.originalname.split('.').pop() || 'bin';
 
         const key = s3Service.generateFileKey(

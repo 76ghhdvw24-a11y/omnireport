@@ -73,7 +73,7 @@ export default function SettingsPage() {
     const file = e.target.files?.[0]; if (!file) return;
     const formData = new FormData(); formData.append('logo', file);
     try {
-      const res = await api.post('/api/v1/organization/logo', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      const res = await api.post('/api/v1/organization/logo', formData);
       setOrg(prev => prev ? { ...prev, logoUrl: res.data.logoUrl } : null);
       toast.success('Logo actualizado');
     } catch { toast.error('Error al subir logo'); }
