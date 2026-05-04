@@ -35,7 +35,7 @@ export function I18nProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <NextIntlClientProvider locale={locale} messages={messages}>
+    <NextIntlClientProvider locale={locale} messages={messages} timeZone="America/Santiago">
       <I18nContext.Provider value={{ locale, changeLocale }}>
         {children}
       </I18nContext.Provider>

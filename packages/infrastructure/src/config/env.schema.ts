@@ -19,6 +19,12 @@ export const envSchema = z.object({
   AWS_S3_BUCKET: z.string().min(1, 'AWS_S3_BUCKET is required'),
   AWS_REGION: z.string().default('us-east-2'),
 
+  LEMONSQUEEZY_API_KEY: z.string().min(1, 'LEMONSQUEEZY_API_KEY is required'),
+  LEMONSQUEEZY_STORE_ID: z.string().min(1, 'LEMONSQUEEZY_STORE_ID is required'),
+  LEMONSQUEEZY_WEBHOOK_SECRET: z.string().min(1, 'LEMONSQUEEZY_WEBHOOK_SECRET is required'),
+  NEXT_PUBLIC_VARIANT_ID_PRO: z.string().min(1, 'NEXT_PUBLIC_VARIANT_ID_PRO is required'),
+  NEXT_PUBLIC_VARIANT_ID_ENTERPRISE: z.string().min(1, 'NEXT_PUBLIC_VARIANT_ID_ENTERPRISE is required'),
+
   CORS_ORIGINS: z.string().optional(),
 });
 

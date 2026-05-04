@@ -28,7 +28,8 @@ model Organization {
   users       User[]
   reports     Report[]
   templates   Template[]
-  clients    Client[]
+  clients     Client[]
+  subscription Subscription?
 
   @@index([slug])
 }
@@ -185,4 +186,29 @@ enum Industry {
   MANUFACTURING
   INSURANCE
   REAL_ESTATE
+}
+
+enum SubscriptionStatus {
+  ACTIVE
+  TRIALLING
+  PAST_DUE
+  CANCELLED
+  EXPIRED
+}
+
+model Subscription {
+  id                String             @id @default(uuid())
+  organizationId    String             @unique
+  organization      Organization       @relation(fields: [organizationId], references: [id])
+  lemonSqueezyId    String?            @unique
+  customerId        String?
+  variantId         String?
+  status            SubscriptionStatus @default(ACTIVE)
+  renewsAt          DateTime?
+  endsAt            DateTime?
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([organizationId])
+  @@index([lemonSqueezyId])
 }

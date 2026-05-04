@@ -1,6 +1,12 @@
 import { v4 as uuidv4 } from 'uuid';
 import { Plan } from '@omnireport/shared';
 
+export const PLAN_LIMITS = {
+  FREE: { maxReports: 5, maxStorageGB: 0.5 },
+  PRO: { maxReports: 50, maxStorageGB: 10 },
+  ENTERPRISE: { maxReports: 200, maxStorageGB: 100 },
+};
+
 export interface OrganizationProps {
   id: string;
   name: string;
@@ -57,22 +63,23 @@ export class Organization {
 
     switch (newPlan) {
       case 'PRO':
-        this.maxReports = 100;
-        this.maxStorage = BigInt(10737418240); // 10GB
+        this.maxReports = PLAN_LIMITS.PRO.maxReports;
+        this.maxStorage = BigInt(PLAN_LIMITS.PRO.maxStorageGB * 1024 * 1024 * 1024);
         break;
       case 'ENTERPRISE':
-        this.maxReports = -1; // Unlimited
-        this.maxStorage = BigInt(107374182400); // 100GB
+        this.maxReports = PLAN_LIMITS.ENTERPRISE.maxReports;
+        this.maxStorage = BigInt(PLAN_LIMITS.ENTERPRISE.maxStorageGB * 1024 * 1024 * 1024);
         break;
       case 'FREE':
       default:
-        this.maxReports = 10;
-        this.maxStorage = BigInt(1073741824); // 1GB
+        this.maxReports = PLAN_LIMITS.FREE.maxReports;
+        this.maxStorage = BigInt(PLAN_LIMITS.FREE.maxStorageGB * 1024 * 1024 * 1024);
         break;
     }
   }
 
   canCreateReport(reportCount: number): boolean {
-    return this.maxReports === -1 || reportCount < this.maxReports;
+    const limit = PLAN_LIMITS[this.plan].maxReports;
+    return reportCount < limit;
   }
 }

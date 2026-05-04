@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth';
 import { api } from '@/lib/api';
 import {
   Loader2, Save, Users, Settings, UserPlus, Trash2, Shield, User,
-  X, Copy, Check,
+  X, Copy, Check, CreditCard, Zap, Crown,
 } from 'lucide-react';
 import { NavBar } from '@/components/navbar';
 import { toast } from 'sonner';
@@ -15,6 +15,7 @@ import { useTranslations } from 'next-intl';
 interface Organization {
   id: string; name: string; slug: string; address: string | null; phone: string | null;
   taxId: string | null; country: string | null; currency: string; language: string; logoUrl: string | null;
+  plan?: 'FREE' | 'PRO' | 'ENTERPRISE';
 }
 
 interface Member {
@@ -41,7 +42,7 @@ export default function SettingsPage() {
   const t = useTranslations();
   const router = useRouter();
   const { user, isLoading: authLoading } = useAuth();
-  const [activeTab, setActiveTab] = useState<'general' | 'team'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'team' | 'billing'>('general');
 
   const [org, setOrg] = useState<Organization | null>(null);
   const [isLoadingOrg, setIsLoadingOrg] = useState(true);
@@ -64,6 +65,8 @@ export default function SettingsPage() {
   const [isInviting, setIsInviting] = useState(false);
   const [invitedPassword, setInvitedPassword] = useState<string | null>(null);
   const [copiedPassword, setCopiedPassword] = useState(false);
+
+  const [isUpgrading, setIsUpgrading] = useState(false);
 
   useEffect(() => {
     if (authLoading) return;
@@ -174,6 +177,31 @@ export default function SettingsPage() {
     setCopiedPassword(false);
   };
 
+  const handleUpgrade = async (plan: 'PRO' | 'ENTERPRISE') => {
+    setIsUpgrading(true);
+    try {
+      const variantId = plan === 'PRO'
+        ? process.env.NEXT_PUBLIC_VARIANT_ID_PRO
+        : process.env.NEXT_PUBLIC_VARIANT_ID_ENTERPRISE;
+
+      console.log('[Upgrade] Plan:', plan, 'VariantId:', variantId);
+
+      if (!variantId || variantId.includes('your-') || variantId.length < 3) {
+        toast.error(`Configuración de plan no disponible. variantId="${variantId}"`);
+        return;
+      }
+
+      const res = await api.post('/api/v1/subscriptions/checkout', { variantId });
+      if (res.data.checkoutUrl) {
+        window.open(res.data.checkoutUrl, '_blank');
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || err.message || 'Error al iniciar upgrade');
+    } finally {
+      setIsUpgrading(false);
+    }
+  };
+
   if (authLoading || isLoadingOrg) return <main className="min-h-screen flex items-center justify-center bg-gray-50"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></main>;
   if (!user) return null;
 
@@ -198,6 +226,12 @@ export default function SettingsPage() {
             className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'team' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
           >
             <Users className="w-4 h-4" />{t('settings.team')}
+          </button>
+          <button
+            onClick={() => setActiveTab('billing')}
+            className={`flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 transition-colors ${activeTab === 'billing' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
+          >
+            <CreditCard className="w-4 h-4" />{t('settings.billing') || 'Facturación'}
           </button>
         </div>
 
@@ -355,6 +389,90 @@ export default function SettingsPage() {
                 </table>
               )}
             </div>
+          </div>
+        )}
+
+        {activeTab === 'billing' && (
+          <div className="space-y-6">
+            <div className="bg-white rounded-lg shadow p-6">
+              <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('settings.currentPlan') || 'Plan Actual'}</h2>
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                <div className="flex items-center gap-3">
+                  {org?.plan === 'ENTERPRISE' ? (
+                    <Crown className="w-8 h-8 text-purple-600" />
+                  ) : org?.plan === 'PRO' ? (
+                    <Zap className="w-8 h-8 text-blue-600" />
+                  ) : (
+                    <Zap className="w-8 h-8 text-gray-400" />
+                  )}
+                  <div>
+                    <p className="font-semibold text-gray-900">{org?.plan || 'FREE'} Plan</p>
+                    <p className="text-sm text-gray-500">
+                      {org?.plan === 'FREE' ? '10 reportes limite' : org?.plan === 'PRO' ? '100 reportes limite' : 'Reportes ilimitados'}
+                    </p>
+                  </div>
+                </div>
+                {org?.plan !== 'FREE' && (
+                  <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-sm font-medium">Activo</span>
+                )}
+              </div>
+            </div>
+
+            {(org?.plan === 'FREE') && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-white rounded-lg shadow p-6 border-2 border-blue-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Zap className="w-5 h-5 text-blue-600" />
+                      <h3 className="font-semibold text-gray-900">Plan PRO</h3>
+                    </div>
+                    <span className="text-lg font-bold text-gray-900">$49</span>
+                  </div>
+                  <p className="text-sm text-gray-500 mb-1">50 reportes, 10GB almacenamiento, IA avanzada</p>
+                  <p className="text-xs text-gray-400 mb-4">Facturación mensual</p>
+                  <button
+                    onClick={() => handleUpgrade('PRO')}
+                    disabled={isUpgrading}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                  >
+                    {isUpgrading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Mejorar a PRO'}
+                  </button>
+                </div>
+                <div className="bg-white rounded-lg shadow p-6 border-2 border-purple-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Crown className="w-5 h-5 text-purple-600" />
+                      <h3 className="font-semibold text-gray-900">Plan ENTERPRISE</h3>
+                    </div>
+                    <span className="text-lg font-bold text-gray-900">$199</span>
+                  </div>
+                  <p className="text-sm text-gray-500 mb-1">200 reportes, 100GB, API access</p>
+                  <p className="text-xs text-gray-400 mb-4">Facturación mensual</p>
+                  <button
+                    onClick={() => handleUpgrade('ENTERPRISE')}
+                    disabled={isUpgrading}
+                    className="w-full px-4 py-2 bg-purple-600 text-white rounded-md text-sm font-medium hover:bg-purple-700 disabled:opacity-50"
+                  >
+                    {isUpgrading ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : 'Mejorar a ENTERPRISE'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {org?.plan !== 'FREE' && (
+              <div className="bg-white rounded-lg shadow p-6">
+                <h3 className="font-semibold text-gray-900 mb-4">{t('settings.subscriptionManagement') || 'Gestión de Suscripción'}</h3>
+                <p className="text-sm text-gray-500 mb-4">
+                  {t('settings.subscriptionDesc') || 'Tu suscripción está gestionada a través de Lemon Squeezy.'}
+                </p>
+                <button
+                  onClick={() => window.open('https://app.lemonsqueezy.com', '_blank')}
+                  className="px-4 py-2 bg-gray-100 text-gray-700 rounded-md text-sm font-medium hover:bg-gray-200"
+                >
+                  {t('settings.manageInLemonSqueezy') || 'Gestionar en Lemon Squeezy'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>

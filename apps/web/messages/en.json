@@ -105,7 +105,14 @@
     "invite": "Invite",
     "inviteSuccess": "Member invited successfully",
     "tempPassword": "Share this temporary password with the new member",
-    "close": "Close"
+    "close": "Close",
+    "billing": "Billing",
+    "currentPlan": "Current Plan",
+    "upgradeToPro": "Upgrade to PRO",
+    "upgradeToEnterprise": "Upgrade to ENTERPRISE",
+    "subscriptionManagement": "Subscription Management",
+    "subscriptionDesc": "Your subscription is managed through Lemon Squeezy.",
+    "manageInLemonSqueezy": "Manage in Lemon Squeezy"
   },
   "profile": {
     "title": "My Profile",

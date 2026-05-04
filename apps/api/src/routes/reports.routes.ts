@@ -2,8 +2,8 @@ import { Router } from 'express';
 import { z } from 'zod';
 import path from 'path';
 import { PrismaClient } from '@prisma/client';
-import { QueueService, S3Service, PDFGeneratorService, logger } from '@omnireport/infrastructure';
-import { ProcessMediaUseCase } from '@omnireport/use-cases';
+import { QueueService, S3Service, PDFGeneratorService, PrismaSubscriptionRepository, logger } from '@omnireport/infrastructure';
+import { ProcessMediaUseCase, ValidateReportCreationUseCase } from '@omnireport/use-cases';
 import { PrismaReportRepository } from '@omnireport/infrastructure';
 import { createUploadMiddleware, validateFileContent } from '../middleware/file-validator';
 
@@ -46,10 +46,16 @@ export function createReportsRoutes(
   processMediaUseCase: ProcessMediaUseCase,
   queueService: QueueService,
   s3Service: S3Service,
-  pdfService: PDFGeneratorService
+  pdfService: PDFGeneratorService,
+  subscriptionRepo?: PrismaSubscriptionRepository
 ): Router {
   const router = Router();
   const reportRepo = new PrismaReportRepository(prisma);
+
+  let validateReportCreationUseCase: ValidateReportCreationUseCase | null = null;
+  if (subscriptionRepo) {
+    validateReportCreationUseCase = new ValidateReportCreationUseCase({ subscriptionRepo, prisma });
+  }
 
   router.post('/', async (req, res) => {
     try {
@@ -69,15 +75,27 @@ export function createReportsRoutes(
         return res.status(404).json({ error: 'Organization not found' });
       }
 
-      const reportCount = await prisma.report.count({ where: { organizationId: req.orgId } });
-      const maxReports = org.plan === 'ENTERPRISE' ? -1 : org.plan === 'PRO' ? 100 : 10;
-      if (maxReports !== -1 && reportCount >= maxReports) {
-        return res.status(403).json({
-          error: 'Report limit reached',
-          details: `Your ${org.plan} plan allows up to ${maxReports} reports. Upgrade to create more.`,
-          currentCount: reportCount,
-          maxReports,
-        });
+      if (validateReportCreationUseCase) {
+        const validation = await validateReportCreationUseCase.execute(req.orgId);
+        if (!validation.canCreate) {
+          return res.status(403).json({
+            error: 'Report limit reached',
+            details: validation.reason,
+            currentCount: validation.currentCount,
+            maxReports: validation.maxReports,
+          });
+        }
+      } else {
+        const reportCount = await prisma.report.count({ where: { organizationId: req.orgId } });
+        const maxReports = org.plan === 'ENTERPRISE' ? -1 : org.plan === 'PRO' ? 100 : 10;
+        if (maxReports !== -1 && reportCount >= maxReports) {
+          return res.status(403).json({
+            error: 'Report limit reached',
+            details: `Your ${org.plan} plan allows up to ${maxReports} reports. Upgrade to create more.`,
+            currentCount: reportCount,
+            maxReports,
+          });
+        }
       }
 
       const report = await reportRepo.create({

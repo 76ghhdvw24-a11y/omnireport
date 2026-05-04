@@ -7,8 +7,8 @@ import rateLimit from 'express-rate-limit';
 import { PrismaClient } from '@prisma/client';
 import {
   QueueService, S3Service, JWTService, PasswordService, PDFGeneratorService,
-  NvidiaService, WhisperService,
-  PrismaReportRepository, PrismaUserRepository, PrismaOrganizationRepository, PrismaClientRepository, PrismaTemplateRepository,
+  NvidiaService, WhisperService, LemonSqueezyService,
+  PrismaReportRepository, PrismaUserRepository, PrismaOrganizationRepository, PrismaClientRepository, PrismaTemplateRepository, PrismaSubscriptionRepository,
   logger, TokenBlacklistService,
   validateEnv,
 } from '@omnireport/infrastructure';
@@ -24,6 +24,8 @@ import { createOrganizationRoutes } from './routes/organization.routes';
 import { createClientsRoutes } from './routes/clients.routes';
 import { createTemplatesRoutes } from './routes/templates.routes';
 import { createChatRoutes } from './routes/chat.routes';
+import { createWebhooksRoutes } from './routes/webhooks.routes';
+import { createSubscriptionsRoutes } from './routes/subscriptions.routes';
 
 let env: ReturnType<typeof validateEnv>;
 try {
@@ -95,6 +97,7 @@ const userRepo = new PrismaUserRepository(prisma);
 const orgRepo = new PrismaOrganizationRepository(prisma);
 const clientRepo = new PrismaClientRepository(prisma);
 const templateRepo = new PrismaTemplateRepository(prisma);
+const subscriptionRepo = new PrismaSubscriptionRepository(prisma);
 
 const s3Service = new S3Service({
   region: env.AWS_REGION,
@@ -120,6 +123,12 @@ const queueService = new QueueService({
 const processMediaUseCase = new ProcessMediaUseCase({ s3Service });
 const pdfService = new PDFGeneratorService();
 
+const lemonSqueezyService = new LemonSqueezyService({
+  apiKey: env.LEMONSQUEEZY_API_KEY,
+  storeId: env.LEMONSQUEEZY_STORE_ID,
+  webhookSecret: env.LEMONSQUEEZY_WEBHOOK_SECRET,
+});
+
 const nvidiaService = new NvidiaService({
   apiKey: env.NVIDIA_API_KEY,
   model: 'google/gemma-4-31b-it',
@@ -144,12 +153,14 @@ app.use('/api/v1', apiLimiter);
 
 app.use('/api/v1/reports', authMiddleware, createChatRoutes(prisma, s3Service, nvidiaService, whisperService));
 
-const reportsRouter = createReportsRoutes(prisma, processMediaUseCase, queueService, s3Service, pdfService);
+const reportsRouter = createReportsRoutes(prisma, processMediaUseCase, queueService, s3Service, pdfService, subscriptionRepo);
 app.use('/api/v1/reports', authMiddleware, reportCreationLimiter, reportsRouter);
 
 app.use('/api/v1/organization', authMiddleware, createOrganizationRoutes(prisma, orgRepo, s3Service, passwordService));
 app.use('/api/v1/clients', authMiddleware, createClientsRoutes(clientRepo, requireRole('ADMIN')));
 app.use('/api/v1/templates', authMiddleware, createTemplatesRoutes(templateRepo, requireRole('ADMIN')));
+app.use('/api/v1/subscriptions', authMiddleware, createSubscriptionsRoutes(prisma, lemonSqueezyService));
+app.use('/webhooks', createWebhooksRoutes(prisma, lemonSqueezyService));
 
 app.get('/', (req, res) => {
   res.json({
