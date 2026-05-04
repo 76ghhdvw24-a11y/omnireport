@@ -3,19 +3,23 @@
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
-import { FileText, Plus, Settings, Users, LogOut, Menu, X, MessageSquare } from 'lucide-react';
+import { FileText, Plus, Settings, Users, LogOut, Menu, X, MessageSquare, LayoutTemplate, UserCircle } from 'lucide-react';
 import { useState } from 'react';
+import { useTranslations } from 'next-intl';
 
-const navItems = [
-  { href: '/dashboard', label: 'Presupuestos', icon: FileText },
-  { href: '/clients', label: 'Clientes', icon: Users },
-  { href: '/settings', label: 'Configuración', icon: Settings },
+const getNavItems = (t: (key: string) => string) => [
+  { href: '/dashboard', label: t('nav.budgets'), icon: FileText },
+  { href: '/clients', label: t('nav.clients'), icon: Users },
+  { href: '/templates', label: t('nav.templates'), icon: LayoutTemplate },
+  { href: '/settings', label: t('nav.settings'), icon: Settings },
 ];
 
 export function NavBar() {
+  const t = useTranslations();
   const { user, logout } = useAuth();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const navItems = getNavItems(t);
 
   const handleLogout = () => {
     logout();
@@ -46,14 +50,17 @@ export function NavBar() {
         <div className="flex items-center gap-3">
 <div className="flex items-center gap-2">
             <Link href="/reports/new" className="hidden sm:flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-md text-sm font-medium hover:bg-blue-700 transition-colors">
-              <Plus className="w-4 h-4" />Nuevo
+              <Plus className="w-4 h-4" />{t('nav.new')}
             </Link>
             <Link href="/reports/new/chat" className="hidden sm:flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md text-sm font-medium hover:bg-purple-700 transition-colors">
-              <MessageSquare className="w-4 h-4" />Con IA
+              <MessageSquare className="w-4 h-4" />{t('nav.withAI')}
             </Link>
           </div>
-          <span className="hidden md:block text-sm text-gray-500">{user.email}</span>
-          <button onClick={handleLogout} className="text-gray-400 hover:text-red-500 transition-colors" title="Cerrar sesión">
+          <Link href="/profile" className="hidden md:flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
+            <UserCircle className="w-4 h-4" />
+            <span>{user.firstName}</span>
+          </Link>
+          <button onClick={handleLogout} className="text-gray-400 hover:text-red-500 transition-colors" title={t('nav.logout')}>
             <LogOut className="w-4 h-4" />
           </button>
           <button className="md:hidden text-gray-600" onClick={() => setMobileOpen(!mobileOpen)}>
@@ -73,10 +80,10 @@ export function NavBar() {
             );
           })}
           <Link href="/reports/new" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-blue-600">
-            <Plus className="w-4 h-4" />Nuevo
+            <Plus className="w-4 h-4" />{t('nav.new')}
           </Link>
           <Link href="/reports/new/chat" onClick={() => setMobileOpen(false)} className="flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium text-purple-600">
-            <MessageSquare className="w-4 h-4" />Con IA
+            <MessageSquare className="w-4 h-4" />{t('nav.withAI')}
           </Link>
         </nav>
       )}

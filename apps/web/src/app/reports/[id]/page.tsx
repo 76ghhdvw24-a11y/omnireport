@@ -8,6 +8,7 @@ import {
   Loader2, AlertTriangle, CheckCircle, Clock, XCircle, Download,
   Pencil, CheckCircle2, MessageSquare, X, Send, Mic,
   Plus, Trash2, Check, XIcon, Image as ImageIcon, Sparkles, MicOff, Film,
+  Eye,
 } from 'lucide-react';
 import { NavBar } from '@/components/navbar';
 import { toast } from 'sonner';
@@ -61,6 +62,8 @@ export default function ReportDetailPage() {
   const [suggestions, setSuggestions] = useState<Suggestion[]>([]);
   const [isRecording, setIsRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [showPdfPreview, setShowPdfPreview] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState<string | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
   const imageInputRef = useRef<HTMLInputElement>(null);
@@ -70,15 +73,66 @@ export default function ReportDetailPage() {
 
   useEffect(() => { if (id) fetchReport(); }, [id]);
   useEffect(() => {
-    if (!report) return;
+    if (!report || !id) return;
     if (['COMPLETED', 'FAILED', 'DRAFT', 'APPROVED'].includes(report.status)) return;
-    const interval = setInterval(() => fetchReport(), 3000);
-    return () => clearInterval(interval);
+
+    const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
+    if (!token) return;
+
+    const es = new EventSource(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000'}/api/v1/reports/${id}/events?token=${token}`);
+
+    es.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.type === 'status-change') {
+          fetchReport();
+        }
+        if (data.type === 'done') {
+          fetchReport();
+          es.close();
+        }
+      } catch {
+        // Ignore parse errors (heartbeats)
+      }
+    };
+
+    es.onerror = () => {
+      es.close();
+    };
+
+    return () => {
+      es.close();
+    };
   }, [report?.status, id]);
   useEffect(() => { if (chatOpen) fetchChat(); }, [chatOpen]);
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
 
-  const fetchReport = async () => { try { const res = await api.get(`/api/v1/reports/${id}`); setReport(res.data); } catch (err: any) { setError(err.response?.data?.error || 'Error al cargar'); } finally { setIsLoading(false); } };
+  const fetchReport = async () => {
+    try {
+      const res = await api.get(`/api/v1/reports/${id}`);
+      const prevStatus = report?.status;
+      const newReport = res.data;
+      setReport(newReport);
+
+      // Notify when report completes or fails
+      if (prevStatus && ['PENDING','PROCESSING','TRANSCRIBING','ANALYZING'].includes(prevStatus)) {
+        if (newReport.status === 'COMPLETED') {
+          toast.success('Presupuesto generado exitosamente', {
+            description: newReport.title,
+            action: { label: 'Ver', onClick: () => window.location.reload() },
+          });
+        } else if (newReport.status === 'FAILED') {
+          toast.error('Error al generar el presupuesto', {
+            description: 'Intenta de nuevo o contacta soporte.',
+          });
+        }
+      }
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Error al cargar');
+    } finally {
+      setIsLoading(false);
+    }
+  };
   const fetchChat = async () => { try { const res = await api.get(`/api/v1/reports/${id}/chat`); setChatMessages(res.data.items); } catch {} };
 
   const sendChat = async (message?: string) => {
@@ -159,6 +213,7 @@ export default function ReportDetailPage() {
   const patch = async (data: Record<string, unknown>) => { await api.patch(`/api/v1/reports/${id}`, data); fetchReport(); };
 
   const downloadPDF = async () => { try { const res = await api.get(`/api/v1/reports/${id}/pdf`, { responseType: 'blob' }); const url = window.URL.createObjectURL(new Blob([res.data])); const link = document.createElement('a'); link.href = url; link.download = `${report?.title || 'presupuesto'}.pdf`; document.body.appendChild(link); link.click(); link.remove(); window.URL.revokeObjectURL(url); } catch { toast.error('Error al generar PDF'); } };
+  const openPdfPreview = async () => { try { const res = await api.get(`/api/v1/reports/${id}/pdf?preview=true`, { responseType: 'blob' }); const url = window.URL.createObjectURL(new Blob([res.data], { type: 'application/pdf' })); setPdfPreviewUrl(url); setShowPdfPreview(true); } catch { toast.error('Error al generar vista previa'); } };
   const changeStatus = async (s: string) => { try { await api.patch(`/api/v1/reports/${id}`, { status: s }); toast.success(`Estado: ${statusLabels[s] || s}`); fetchReport(); } catch { toast.error('Error al cambiar estado'); } };
 
   const updateFinding = async (idx: number, field: string, value: unknown) => { if (!report?.findings) return; const updated = [...report.findings]; updated[idx] = { ...updated[idx], [field]: value }; await patch({ findings: updated }); toast.success('Hallazgo actualizado'); };
@@ -240,7 +295,10 @@ export default function ReportDetailPage() {
           </div>
           <div className="flex items-center gap-2">
             {(report.status === 'COMPLETED' || isEditable || report.status === 'APPROVED') && (
-              <button onClick={downloadPDF} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50"><Download className="w-4 h-4" />PDF</button>
+              <>
+                <button onClick={openPdfPreview} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50"><Eye className="w-4 h-4" />Vista previa</button>
+                <button onClick={downloadPDF} className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-300 rounded-md text-sm font-medium hover:bg-gray-50"><Download className="w-4 h-4" />Descargar PDF</button>
+              </>
             )}
             {canEdit && (
               <button onClick={() => setChatOpen(true)} className="flex items-center gap-2 px-4 py-2 bg-purple-600 text-white rounded-md text-sm font-medium hover:bg-purple-700"><MessageSquare className="w-4 h-4" />IA</button>
@@ -554,6 +612,32 @@ export default function ReportDetailPage() {
                   <Sparkles className="w-3 h-3 inline mr-1" />Sugerir mejoras
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* === PDF PREVIEW MODAL === */}
+      {showPdfPreview && pdfPreviewUrl && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center print:hidden">
+          <div className="absolute inset-0 bg-black/50" onClick={() => { setShowPdfPreview(false); if (pdfPreviewUrl) { window.URL.revokeObjectURL(pdfPreviewUrl); setPdfPreviewUrl(null); } }} />
+          <div className="relative z-10 w-full max-w-5xl h-[90vh] mx-4 bg-white rounded-lg shadow-2xl flex flex-col overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h3 className="font-semibold text-gray-900">Vista previa del presupuesto</h3>
+              <div className="flex items-center gap-2">
+                <button onClick={downloadPDF} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-md text-xs font-medium hover:bg-blue-700">
+                  <Download className="w-3.5 h-3.5" />Descargar
+                </button>
+                <button
+                  onClick={() => { setShowPdfPreview(false); if (pdfPreviewUrl) { window.URL.revokeObjectURL(pdfPreviewUrl); setPdfPreviewUrl(null); } }}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+            <div className="flex-1 bg-gray-100">
+              <iframe src={pdfPreviewUrl} className="w-full h-full" title="Vista previa PDF" />
             </div>
           </div>
         </div>

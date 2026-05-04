@@ -1,5 +1,5 @@
 import { PrismaClient, Prisma } from '@prisma/client';
-import { Report } from '@omnireport/shared';
+import { Report, Finding } from '@omnireport/shared';
 import { ReportRepository } from '@omnireport/domain';
 
 export class PrismaReportRepository implements ReportRepository {
@@ -13,19 +13,26 @@ export class PrismaReportRepository implements ReportRepository {
 
   async findMany(
     organizationId: string,
-    options?: { skip?: number; take?: number; status?: string }
+    options?: { skip?: number; take?: number; status?: string; search?: string; sortBy?: string; sortOrder?: 'asc' | 'desc' }
   ): Promise<{ items: Report[]; total: number }> {
     const where: Prisma.ReportWhereInput = { organizationId };
     if (options?.status) {
       where.status = options.status as any;
     }
+    if (options?.search) {
+      where.title = { contains: options.search, mode: 'insensitive' };
+    }
+
+    const validSortFields = ['createdAt', 'title', 'status', 'severity', 'updatedAt'];
+    const sortBy = options?.sortBy && validSortFields.includes(options.sortBy) ? options.sortBy : 'createdAt';
+    const sortOrder = options?.sortOrder || 'desc';
 
     const [items, total] = await Promise.all([
       this.prisma.report.findMany({
         where,
         skip: options?.skip,
         take: options?.take,
-        orderBy: { createdAt: 'desc' },
+        orderBy: { [sortBy]: sortOrder },
       }),
       this.prisma.report.count({ where }),
     ]);
@@ -50,19 +57,19 @@ export class PrismaReportRepository implements ReportRepository {
         audioUrl: data.audioUrl,
         audioTranscript: data.audioTranscript,
         imageUrls: data.imageUrls,
-        findings: data.findings as any,
+        findings: data.findings ? JSON.parse(JSON.stringify(data.findings)) : null,
         executiveSummary: data.executiveSummary,
         recommendedAction: data.recommendedAction,
         aiModel: data.aiModel,
         aiResponseTime: data.aiResponseTime,
-        subtotal: (data as any).subtotal,
-        taxRate: (data as any).taxRate,
-        tax: (data as any).tax,
-        total: (data as any).total,
-        currency: (data as any).currency,
-        language: (data as any).language,
-        paymentTerms: (data as any).paymentTerms,
-        metadata: data.metadata as any,
+        subtotal: data.subtotal,
+        taxRate: data.taxRate,
+        tax: data.tax,
+        total: data.total,
+        currency: data.currency,
+        language: data.language,
+        paymentTerms: data.paymentTerms,
+        metadata: data.metadata ? JSON.parse(JSON.stringify(data.metadata)) : null,
         tags: data.tags,
       },
     });
@@ -86,14 +93,15 @@ export class PrismaReportRepository implements ReportRepository {
     if (data.metadata !== undefined) updateData.metadata = data.metadata as any;
     if (data.tags !== undefined) updateData.tags = data.tags;
     if (data.completedAt !== undefined) updateData.completedAt = data.completedAt;
-    if ((data as any).clientId !== undefined) updateData.client = { connect: { id: (data as any).clientId } };
-    if ((data as any).subtotal !== undefined) updateData.subtotal = (data as any).subtotal;
-    if ((data as any).taxRate !== undefined) updateData.taxRate = (data as any).taxRate;
-    if ((data as any).tax !== undefined) updateData.tax = (data as any).tax;
-    if ((data as any).total !== undefined) updateData.total = (data as any).total;
-    if ((data as any).currency !== undefined) updateData.currency = (data as any).currency;
-    if ((data as any).language !== undefined) updateData.language = (data as any).language;
-    if ((data as any).paymentTerms !== undefined) updateData.paymentTerms = (data as any).paymentTerms;
+    if (data.clientId !== undefined && data.clientId !== null) updateData.client = { connect: { id: data.clientId } };
+    if (data.clientId === null) updateData.client = { disconnect: true };
+    if (data.subtotal !== undefined) updateData.subtotal = data.subtotal;
+    if (data.taxRate !== undefined) updateData.taxRate = data.taxRate;
+    if (data.tax !== undefined) updateData.tax = data.tax;
+    if (data.total !== undefined) updateData.total = data.total;
+    if (data.currency !== undefined) updateData.currency = data.currency;
+    if (data.language !== undefined) updateData.language = data.language;
+    if (data.paymentTerms !== undefined) updateData.paymentTerms = data.paymentTerms;
 
     await this.prisma.report.update({
       where: { id },
@@ -130,7 +138,7 @@ export class PrismaReportRepository implements ReportRepository {
       audioUrl: prismaReport.audioUrl,
       audioTranscript: prismaReport.audioTranscript,
       imageUrls: prismaReport.imageUrls || [],
-      findings: prismaReport.findings as any,
+      findings: prismaReport.findings as Finding[] | null,
       executiveSummary: prismaReport.executiveSummary,
       recommendedAction: prismaReport.recommendedAction,
       aiModel: prismaReport.aiModel,
@@ -142,7 +150,7 @@ export class PrismaReportRepository implements ReportRepository {
       currency: prismaReport.currency,
       language: prismaReport.language,
       paymentTerms: prismaReport.paymentTerms,
-      metadata: prismaReport.metadata as any,
+      metadata: prismaReport.metadata as Record<string, unknown> | null,
       tags: prismaReport.tags || [],
       createdAt: prismaReport.createdAt,
       updatedAt: prismaReport.updatedAt,

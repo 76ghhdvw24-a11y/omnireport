@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
 import { AuthProvider } from '@/lib/auth';
+import { I18nProvider } from '@/components/i18n-provider';
 import { Toaster } from 'sonner';
 
 export const metadata: Metadata = {
@@ -14,12 +15,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="es">
       <body>
-        <AuthProvider>
-          {children}
-          <Toaster position="top-right" />
-        </AuthProvider>
+        <I18nProvider>
+          <AuthProvider>
+            {children}
+            <Toaster position="top-right" />
+          </AuthProvider>
+        </I18nProvider>
       </body>
     </html>
   );

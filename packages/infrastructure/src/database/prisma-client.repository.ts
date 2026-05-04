@@ -18,12 +18,12 @@ export class PrismaClientRepository {
     return this.mapToClient(client);
   }
 
-  async create(data: { name: string; email?: string; phone?: string; address?: string; taxId?: string; organizationId: string }): Promise<Client> {
+  async create(data: { name: string; email?: string | null; phone?: string | null; address?: string | null; taxId?: string | null; organizationId: string }): Promise<Client> {
     const client = await this.prisma.client.create({ data });
     return this.mapToClient(client);
   }
 
-  async update(id: string, data: { name?: string; email?: string; phone?: string; address?: string; taxId?: string }): Promise<Client> {
+  async update(id: string, data: { name?: string; email?: string | null; phone?: string | null; address?: string | null; taxId?: string | null }): Promise<Client> {
     const client = await this.prisma.client.update({ where: { id }, data });
     return this.mapToClient(client);
   }

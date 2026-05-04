@@ -9,10 +9,15 @@ import { toast } from 'sonner';
 
 interface ChatMsg { id: string; role: string; content: string; createdAt: string }
 interface Suggestion { field: string; value: unknown; reason: string }
+interface Template { id: string; name: string; description: string | null; industry: string }
+interface Client { id: string; name: string }
 
 export default function NewChatReportPage() {
   const router = useRouter();
   const [title, setTitle] = useState('');
+  const [templateId, setTemplateId] = useState('');
+  const [clientId, setClientId] = useState('');
+  const [language, setLanguage] = useState('es');
   const [creating, setCreating] = useState(false);
   const [chatMessages, setChatMessages] = useState<ChatMsg[]>([]);
   const [chatInput, setChatInput] = useState('');
@@ -21,16 +26,38 @@ export default function NewChatReportPage() {
   const [isRecording, setIsRecording] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [reportId, setReportId] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<Template[]>([]);
+  const [clients, setClients] = useState<Client[]>([]);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages]);
 
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [tRes, cRes] = await Promise.all([
+          api.get('/api/v1/templates'),
+          api.get('/api/v1/clients'),
+        ]);
+        setTemplates(tRes.data.items);
+        setClients(cRes.data.items);
+      } catch {}
+    };
+    fetchData();
+  }, []);
+
   const createAndStart = async () => {
     if (!title.trim()) { toast.error('Ingresá un título'); return; }
     setCreating(true);
     try {
-      const res = await api.post('/api/v1/reports', { title: title.trim(), description: 'Presupuesto creado desde chat con IA' });
+      const res = await api.post('/api/v1/reports', {
+        title: title.trim(),
+        description: 'Presupuesto creado desde chat con IA',
+        templateId: templateId || undefined,
+        clientId: clientId || undefined,
+        language,
+      });
       const newId = res.data.id;
       setReportId(newId);
       setChatMessages([{ id: 'sys-1', role: 'assistant', content: '¡Presupuesto creado! Podés:\n\n• **Subir fotos o videos** del problema\n• **Grabar una nota de voz**\n• **Escribir** lo que necesitás\n\nYo me encargo de generar los items con precios.', createdAt: new Date().toISOString() }]);
@@ -90,7 +117,7 @@ export default function NewChatReportPage() {
     const videoNames = files.filter(f => f.type.startsWith('video/')).map(f => f.name);
     const desc: string[] = [];
     if (imageNames.length > 0) desc.push(`${imageNames.length} imagen${imageNames.length > 1 ? 'es' : ''}`);
-    if (videoNames.length > 0) desc.push(`${videoNames.length} video${videoNames.length > 1 ? 's' : ''}`);
+    if (videoNames.length > 0) desc.push(`${videoNames.length > 1 ? 's' : ''} video${videoNames.length > 1 ? 's' : ''}`);
 
     setChatMessages(p => [...p, { id: `f-${Date.now()}`, role: 'user', content: `📎 Subiendo ${desc.join(' y ')}...`, createdAt: new Date().toISOString() }]);
     try {
@@ -193,7 +220,7 @@ export default function NewChatReportPage() {
             <h1 className="text-lg font-semibold text-gray-900">Crear desde Chat</h1>
           </div>
           <div className="bg-white rounded-lg shadow p-6 space-y-4">
-            <div className="text-center py-6">
+            <div className="text-center py-4">
               <Sparkles className="w-12 h-12 text-purple-500 mx-auto mb-4" />
               <h2 className="text-xl font-semibold text-gray-900 mb-2">Presupuesto con IA</h2>
               <p className="text-sm text-gray-500">Subí fotos, videos o grabá una nota de voz. La IA genera el presupuesto por vos.</p>
@@ -201,6 +228,30 @@ export default function NewChatReportPage() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Título del presupuesto *</label>
               <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500" placeholder="Ej: Inspección plomería cocina" />
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Plantilla</label>
+                <select value={templateId} onChange={(e) => setTemplateId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+                  <option value="">General (predeterminado)</option>
+                  {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Cliente</label>
+                <select value={clientId} onChange={(e) => setClientId(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+                  <option value="">Sin cliente</option>
+                  {clients.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Idioma</label>
+                <select value={language} onChange={(e) => setLanguage(e.target.value)} className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-purple-500">
+                  <option value="es">Español</option>
+                  <option value="en">English</option>
+                  <option value="pt">Português</option>
+                </select>
+              </div>
             </div>
             <button onClick={createAndStart} disabled={creating || !title.trim()} className="w-full px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 disabled:opacity-50">
               {creating ? <><Loader2 className="w-4 h-4 animate-spin inline mr-2" />Creando...</> : 'Comenzar'}

@@ -15,12 +15,22 @@ declare global {
 export function createAuthMiddleware(jwtService: JWTService) {
   return async (req: Request, res: Response, next: NextFunction) => {
     try {
+      let token: string | undefined;
+
       const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith('Bearer ')) {
+      if (authHeader?.startsWith('Bearer ')) {
+        token = authHeader.substring(7);
+      }
+
+      // Support token via query param for SSE (EventSource cannot send custom headers)
+      if (!token && typeof req.query.token === 'string') {
+        token = req.query.token;
+      }
+
+      if (!token) {
         return res.status(401).json({ error: 'Unauthorized - no token' });
       }
 
-      const token = authHeader.substring(7);
       let payload;
       try {
         payload = jwtService.verifyAccessToken(token);
@@ -38,5 +48,17 @@ export function createAuthMiddleware(jwtService: JWTService) {
       console.error('Auth middleware error:', error);
       return res.status(401).json({ error: 'Authentication failed' });
     }
+  };
+}
+
+export function requireRole(...roles: string[]) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    if (!req.role) {
+      return res.status(401).json({ error: 'Unauthorized - no role' });
+    }
+    if (!roles.includes(req.role)) {
+      return res.status(403).json({ error: 'Forbidden - insufficient permissions' });
+    }
+    next();
   };
 }

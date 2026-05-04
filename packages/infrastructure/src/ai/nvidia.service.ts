@@ -12,6 +12,7 @@ export interface NvidiaAnalysisRequest {
   images: Array<{ url: string; mimeType: string }>;
   systemPrompt: string;
   outputFormat: Record<string, unknown>;
+  language?: string;
 }
 
 export class NvidiaService {
@@ -26,11 +27,11 @@ export class NvidiaService {
     const content: Array<{ type: string; text?: string; image_url?: { url: string } }> = [];
 
     const hasTranscript = request.transcript.trim().length > 0;
-    const transcriptSection = hasTranscript
-      ? `TRANSCRIPT:\n${request.transcript}\n\n`
+    const languageInstruction = request.language
+      ? `IMPORTANT: Respond entirely in ${request.language}. All findings, summaries, and recommendations must be written in ${request.language}.\n\n`
       : '';
-
-    const prompt = `ANALYZE THE FOLLOWING:\n\n${transcriptSection}${request.images.length > 0 ? `${request.images.length} image(s) provided` : 'No images provided'}\n\nProvide a structured analysis following this format:\n${JSON.stringify(request.outputFormat, null, 2)}\n\nEnsure the response is valid JSON with all required fields.`;
+    const transcriptSection = hasTranscript ? `TRANSCRIPT:\n${request.transcript}\n\n` : '';
+    const prompt = `${languageInstruction}ANALYZE THE FOLLOWING:\n\n${transcriptSection}${request.images.length > 0 ? `${request.images.length} image(s) provided` : 'No images provided'}\n\nProvide a structured analysis following this format:\n${JSON.stringify(request.outputFormat, null, 2)}\n\nEnsure the response is valid JSON with all required fields. Include estimated costs for each finding when applicable.`;
 
     content.push({ type: 'text', text: prompt });
 
@@ -70,6 +71,32 @@ export class NvidiaService {
     const text = data.choices?.[0]?.message?.content || '';
 
     return this.parseAnalysisResponse(text);
+  }
+
+  async chat(messages: Array<{ role: string; content: string }>): Promise<string> {
+    const response = await fetch(this.invokeUrl, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.config.apiKey}`,
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        model: this.config.model,
+        messages,
+        max_tokens: 4096,
+        temperature: 0.3,
+        stream: false,
+      }),
+    });
+
+    if (!response.ok) {
+      const body = await response.text();
+      throw new Error(`NVIDIA API error ${response.status}: ${body}`);
+    }
+
+    const data = await response.json() as Record<string, any>;
+    return data.choices?.[0]?.message?.content || '';
   }
 
   private async fetchImageAsBase64(url: string): Promise<string> {
@@ -115,6 +142,7 @@ export class NvidiaService {
       component: (f as Record<string, unknown>).component ? String((f as Record<string, unknown>).component) : undefined,
       condition: (f as Record<string, unknown>).condition ? String((f as Record<string, unknown>).condition) : undefined,
       estimatedCost: (f as Record<string, unknown>).estimatedCost ? Number((f as Record<string, unknown>).estimatedCost) : undefined,
+      quantity: (f as Record<string, unknown>).quantity ? Number((f as Record<string, unknown>).quantity) : undefined,
       urgency: (f as Record<string, unknown>).urgency ? String((f as Record<string, unknown>).urgency) as Severity : undefined,
     }));
   }

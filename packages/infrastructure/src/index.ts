@@ -9,5 +9,6 @@ export * from './database/prisma-report.repository';
 export * from './database/prisma-user.repository';
 export * from './database/prisma-organization.repository';
 export * from './database/prisma-client.repository';
+export * from './database/prisma-template.repository';
 export * from './pdf/pdf-generator.service';
 export * from './queue/bullmq.service';

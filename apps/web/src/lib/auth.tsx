@@ -18,6 +18,7 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
   logout: () => void;
+  setUser: (user: User | null) => void;
 }
 
 interface RegisterData {
@@ -63,9 +64,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             originalRequest._retry = true;
             try {
               const res = await api.post('/api/v1/auth/refresh', { refreshToken });
-              localStorage.setItem('accessToken', res.data.tokens.accessToken);
-              localStorage.setItem('refreshToken', res.data.tokens.refreshToken);
-              originalRequest.headers.Authorization = `Bearer ${res.data.tokens.accessToken}`;
+              localStorage.setItem('accessToken', res.data.accessToken);
+              localStorage.setItem('refreshToken', res.data.refreshToken);
+              originalRequest.headers.Authorization = `Bearer ${res.data.accessToken}`;
               return api(originalRequest);
             } catch {
               localStorage.removeItem('accessToken');
@@ -86,15 +87,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     const res = await api.post('/api/v1/auth/login', { email, password });
-    localStorage.setItem('accessToken', res.data.tokens.accessToken);
-    localStorage.setItem('refreshToken', res.data.tokens.refreshToken);
+    localStorage.setItem('accessToken', res.data.accessToken);
+    localStorage.setItem('refreshToken', res.data.refreshToken);
     setUser(res.data.user);
   };
 
   const register = async (data: RegisterData) => {
     const res = await api.post('/api/v1/auth/register', data);
-    localStorage.setItem('accessToken', res.data.tokens.accessToken);
-    localStorage.setItem('refreshToken', res.data.tokens.refreshToken);
+    localStorage.setItem('accessToken', res.data.accessToken);
+    localStorage.setItem('refreshToken', res.data.refreshToken);
     setUser(res.data.user);
   };
 
@@ -105,7 +106,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isLoading, login, register, logout }}>
+    <AuthContext.Provider value={{ user, isLoading, login, register, logout, setUser }}>
       {children}
     </AuthContext.Provider>
   );
