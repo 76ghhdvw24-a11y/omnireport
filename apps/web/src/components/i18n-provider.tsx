@@ -2,6 +2,7 @@
 
 import { useEffect, useState, ReactNode } from 'react';
 import { NextIntlClientProvider } from 'next-intl';
+import defaultMessages from '../../messages/es.json';
 
 const loadMessages = async (locale: string) => {
   switch (locale) {
@@ -15,14 +16,16 @@ const loadMessages = async (locale: string) => {
 };
 
 export function I18nProvider({ children }: { children: ReactNode }) {
-  const [messages, setMessages] = useState<Record<string, unknown> | null>(null);
+  const [messages, setMessages] = useState<Record<string, unknown>>(defaultMessages);
   const [locale, setLocale] = useState('es');
 
   useEffect(() => {
     const stored = localStorage.getItem('locale');
     const userLocale = stored || 'es';
-    setLocale(userLocale);
-    loadMessages(userLocale).then(setMessages);
+    if (userLocale !== locale) {
+      setLocale(userLocale);
+      loadMessages(userLocale).then(setMessages);
+    }
   }, []);
 
   const changeLocale = (newLocale: string) => {
@@ -30,8 +33,6 @@ export function I18nProvider({ children }: { children: ReactNode }) {
     setLocale(newLocale);
     loadMessages(newLocale).then(setMessages);
   };
-
-  if (!messages) return <>{children}</>;
 
   return (
     <NextIntlClientProvider locale={locale} messages={messages}>
