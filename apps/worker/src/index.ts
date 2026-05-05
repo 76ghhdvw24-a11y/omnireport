@@ -232,7 +232,7 @@ async function main() {
           const startTime = Date.now();
           const analysis = await nvidiaService.analyzeMedia({
             transcript,
-            images: presignedImageUrls.map(url => ({ url, mimeType: 'image/jpeg' })),
+            images: presignedImageUrls.map((url: string) => ({ url, mimeType: 'image/jpeg' })),
             systemPrompt,
             outputFormat,
             language,
