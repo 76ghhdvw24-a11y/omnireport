@@ -1,4 +1,5 @@
 import 'dotenv/config';
+import http from 'http';
 import { PrismaClient } from '@prisma/client';
 import { Queue, Worker, Job } from 'bullmq';
 import { S3Service, WhisperService, NvidiaService, logger, validateWorkerEnv } from '@omnireport/infrastructure';
@@ -157,6 +158,16 @@ async function main() {
 
   const reportRepo = new WorkerReportRepository(prisma);
 
+  const healthPort = parseInt(process.env.PORT || '8080', 10);
+  const healthServer = http.createServer((_req, res) => {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'healthy', timestamp: new Date().toISOString() }));
+  });
+
+  healthServer.listen(healthPort, () => {
+    logger.info(`Health check server listening on port ${healthPort}`);
+  });
+
   logger.info('Worker started, waiting for jobs...');
 
   const extractS3Key = (url: string): string => {
@@ -276,6 +287,7 @@ async function main() {
 
   const shutdown = async (signal: string) => {
     logger.info(`${signal} received, shutting down worker...`);
+    healthServer.close();
     await worker.close();
     await queue.close();
     await prisma.$disconnect();
